@@ -28,8 +28,26 @@
 #define LWM2MCLIENT_H_
 
 #include "liblwm2m.h"
+#ifdef WITH_TINYDTLS
+#include "tinydtls/connection.h"
+#else
+#include "udp/connection.h"
+#endif
 
 extern int g_reboot;
+
+typedef struct {
+    lwm2m_object_t *securityObjP;
+    lwm2m_object_t *serverObject;
+    int sock;
+#ifdef WITH_TINYDTLS
+    lwm2m_dtls_connection_t *connList;
+    lwm2m_context_t *lwm2mH;
+#else
+    lwm2m_connection_t *connList;
+#endif
+    int addressFamily;
+} client_data_t;
 
 /*
  * object_device.c

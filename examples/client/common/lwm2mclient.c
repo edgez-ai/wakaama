@@ -94,19 +94,6 @@ lwm2m_object_t *objArray[OBJ_COUNT];
 #define BACKUP_OBJECT_COUNT 2
 lwm2m_object_t *backupObjectArray[BACKUP_OBJECT_COUNT];
 
-typedef struct {
-    lwm2m_object_t *securityObjP;
-    lwm2m_object_t *serverObject;
-    int sock;
-#ifdef WITH_TINYDTLS
-    lwm2m_dtls_connection_t *connList;
-    lwm2m_context_t *lwm2mH;
-#else
-    lwm2m_connection_t *connList;
-#endif
-    int addressFamily;
-} client_data_t;
-
 static void prv_quit(lwm2m_context_t *lwm2mH, char *buffer, void *user_data) {
     /* unused parameters */
     (void)lwm2mH;

@@ -25,6 +25,7 @@
       "include",
       "transport/tinydtls",
       "examples/shared",
+      "examples/client/common",
       "LICENSE.*",
       "NOTICE.md",
       "README.md",
@@ -49,6 +50,7 @@
       "+<transport/tinydtls/*.c>",
       "+<transport/tinydtls/third_party/*.c>",
       "+<examples/shared/*.c>",
+      "+<examples/client/common/*.c>",
       "-<tests/*>",
       "-<transport/tinydtls/third_party/tests/*>"
     ],
@@ -63,6 +65,7 @@
       "-Icore",
       "-Icoap",
       "-Iexamples/shared",
+      "-Iexamples/client/common",
       "-Itransport/tinydtls/include",
       "-Itransport/tinydtls/third_party",
   "-Itransport/tinydtls/third_party/tinydtls",
