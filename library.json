@@ -24,6 +24,7 @@
       "data",
       "include",
       "transport/tinydtls",
+      "transport/tinydtls/third_party/tinydtls/platform-specific",
       "examples/shared",
       "examples/client/common",
       "LICENSE.*",
@@ -52,6 +53,7 @@
       "+<transport/tinydtls/third_party/tinydtls/aes/*.c>",
       "+<transport/tinydtls/third_party/tinydtls/ecc/*.c>",
       "+<transport/tinydtls/third_party/tinydtls/sha2/*.c>",
+      "+<transport/tinydtls/third_party/tinydtls/platform-specific/*.c>",
       "+<examples/shared/*.c>",
       "+<examples/client/common/*.c>",
       "-<tests/*>",
@@ -75,13 +77,18 @@
       "-Itransport/tinydtls/third_party/tinydtls/aes",
       "-Itransport/tinydtls/third_party/tinydtls/ecc",
       "-Itransport/tinydtls/third_party/tinydtls/sha2",
+      "-Itransport/tinydtls/third_party/tinydtls/platform-specific",
       "-DLWM2M_COAP_DEFAULT_BLOCK_SIZE=1024",
       "-DLWM2M_COAP_MAX_MESSAGE_SIZE=2048",
       "-DLWM2M_COAP_DEFAULT_MAX_RETRANSMIT=4",
       "-DLWM2M_COAP_SEPARATE_TIMEOUT=15",
       "-DLWM2M_LOG_LEVEL=LWM2M_LOG_DISABLED",
       "-DLWM2M_LOG_MAX_MSG_TXT_SIZE=200",
-      "-DLWM2M_LITTLE_ENDIAN"
+      "-DLWM2M_LITTLE_ENDIAN",
+      "-DWITH_LWIP",
+      "-DESP_PLATFORM",
+      "-DESP32",
+      "-DCONFIG_FREERTOS_UNICORE=1"
     ]
   },
   "examples": [
