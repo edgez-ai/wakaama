@@ -66,6 +66,18 @@ extern "C" {
 #include <stdbool.h>
 #include <time.h>
 
+#ifdef ESP_PLATFORM
+/* If building for ESP32 and the libc doesn't provide getline, expose our fallback.
+ * We rely on build system not defining HAVE_GETLINE when missing; user can define
+ * HAVE_GETLINE to force using the system version if available. */
+#ifndef HAVE_GETLINE
+#include <sys/types.h> /* for ssize_t */
+#include <stdio.h>     /* for FILE */
+ssize_t wakaama_getline(char **lineptr, size_t *n, FILE *stream);
+#define getline wakaama_getline
+#endif /* HAVE_GETLINE */
+#endif /* ESP_PLATFORM */
+
 #ifdef LWM2M_SERVER_MODE
 #ifndef LWM2M_SUPPORT_JSON
 #define LWM2M_SUPPORT_JSON

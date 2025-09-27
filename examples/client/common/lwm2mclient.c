@@ -1273,8 +1273,9 @@ int main(int argc, char *argv[]) {
                 } else if (numBytes >= LWM2M_COAP_MAX_MESSAGE_SIZE) {
                     fprintf(stderr, "Received packet >= LWM2M_COAP_MAX_MESSAGE_SIZE\r\n");
                 } else if (0 < numBytes) {
-                    char s[INET6_ADDRSTRLEN];
-                    in_port_t port;
+                    /* Initialize to avoid maybe-uninitialized warnings (ESP-IDF enables -Werror). */
+                    char s[INET6_ADDRSTRLEN] = {0};
+                    in_port_t port = 0;
 
 #ifdef WITH_TINYDTLS
                     lwm2m_dtls_connection_t *connP;
@@ -1289,7 +1290,7 @@ int main(int argc, char *argv[]) {
                         struct sockaddr_in6 *saddr = (struct sockaddr_in6 *)&addr;
                         inet_ntop(saddr->sin6_family, &saddr->sin6_addr, s, INET6_ADDRSTRLEN);
                         port = saddr->sin6_port;
-                    }
+                    } /* else leave defaults (s empty, port 0) */
                     fprintf(stderr, "%zd bytes received from [%s]:%hu\r\n", numBytes, s, ntohs(port));
 
                     /*
