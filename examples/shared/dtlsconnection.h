@@ -40,6 +40,15 @@
 #define LWM2M_BSSERVER_PORT_STR "5685"
 #define LWM2M_BSSERVER_PORT      5685
 
+
+// ESP32 compatibility: define IN6_IS_ADDR_V4MAPPED if not available
+#ifndef IN6_IS_ADDR_V4MAPPED
+#define IN6_IS_ADDR_V4MAPPED(a) \
+    ((*(const uint32_t *)(const void *)(&(a)->s6_addr[0]) == 0) && \
+     (*(const uint32_t *)(const void *)(&(a)->s6_addr[4]) == 0) && \
+     (*(const uint32_t *)(const void *)(&(a)->s6_addr[8]) == htonl(0x0000ffff)))
+#endif
+
 // after 40sec of inactivity we rehandshake
 #define DTLS_NAT_TIMEOUT 40
 

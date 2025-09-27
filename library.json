@@ -50,6 +50,7 @@
       "+<examples/client/object_connectivity_stat.c>",
       "+<examples/client/object_access_control.c>",
       "+<examples/client/system_api.c>",
+      "+<examples/client/lwm2mclient.c>",
       "+<examples/shared/dtlsconnection.c>",
       "+<examples/shared/tinydtls/ccm.c>",
       "+<examples/shared/tinydtls/crypto.c>",
