@@ -51,7 +51,7 @@ typedef struct {
 
 
 #ifdef ESP32
-ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
+ssize_t custom_getline(char **lineptr, size_t *n, FILE *stream) {
     char *line = *lineptr;
     size_t pos = 0;
     int c;
