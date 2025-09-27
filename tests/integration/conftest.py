@@ -6,10 +6,6 @@ import pexpect
 import pytest
 
 
-BASE_PATH = str(Path(__file__).parent.absolute())
-REPO_BASE_PATH = BASE_PATH + "/../../"
-
-
 # pylint: disable=no-member
 class HelperBase:
     """Provides helper methods for integration tests. Wraps "pexpect" API"""
@@ -71,13 +67,14 @@ class Lwm2mServer(HelperBase):
     """Server subclass of HelperBase"""
 
     def __init__(self, arguments="", timeout=3, encoding="utf8"):
-        self.pexpectobj = pexpect.spawn(REPO_BASE_PATH +
-                                        "/build-wakaama-server/lwm2mserver " +
+        base_path = str(Path(__file__).parent.absolute())
+        self.pexpectobj = pexpect.spawn(base_path +
+                                        "/../../build-wakaama/examples/server/lwm2mserver " +
                                         arguments,
                                         encoding=encoding,
                                         timeout=timeout)
         # pylint: disable=consider-using-with
-        self.pexpectobj.logfile = open(BASE_PATH +
+        self.pexpectobj.logfile = open(base_path +
                                        "/lwm2mserver_log.txt",
                                        "w",
                                        encoding="utf-8")
@@ -87,13 +84,14 @@ class Lwm2mClient(HelperBase):
     """Client subclass of HelperBase"""
 
     def __init__(self, arguments="", timeout=3, encoding="utf8"):
-        self.pexpectobj = pexpect.spawn(REPO_BASE_PATH +
-                                        "/build-wakaama-client/udp/lwm2mclient "
+        base_path = str(Path(__file__).parent.absolute())
+        self.pexpectobj = pexpect.spawn(base_path +
+                                        "/../../build-wakaama/examples/client/lwm2mclient "
                                         + arguments,
                                         encoding=encoding,
                                         timeout=timeout)
         # pylint: disable=consider-using-with
-        self.pexpectobj.logfile = open(BASE_PATH +
+        self.pexpectobj.logfile = open(base_path +
                                        "/lwm2mclient_log.txt",
                                        "w",
                                        encoding="utf-8")
@@ -103,13 +101,15 @@ class Lwm2mBootstrapServer(HelperBase):
     """Bootstrap-server subclass of HelperBase"""
 
     def __init__(self, arguments="", timeout=3, encoding="utf8"):
-        self.pexpectobj = pexpect.spawn(REPO_BASE_PATH +
-                                        "/build-wakaama-bootstrap_server/bootstrap_server "
+        base_path = str(Path(__file__).parent.absolute())
+        self.pexpectobj = pexpect.spawn(base_path +
+                                        "/../../build-wakaama/examples/"
+                                        "bootstrap_server/bootstrap_server "
                                         + arguments,
                                         encoding=encoding,
                                         timeout=timeout)
         # pylint: disable=consider-using-with
-        self.pexpectobj.logfile = open(BASE_PATH +
+        self.pexpectobj.logfile = open(base_path +
                                        "/lwm2mbootstrapserver_log.txt",
                                        "w",
                                        encoding="utf-8")
@@ -144,8 +144,8 @@ def lwm2mclient(request):
 @pytest.fixture
 def lwm2mbootstrapserver():
     """Provide bootstrap_server instance."""
-    ini_file = REPO_BASE_PATH + "/examples/bootstrap_server/bootstrap_server.ini"
-    bootstrapserver = Lwm2mBootstrapServer(f"-f {ini_file}", timeout=13)
+    bootstrapserver = Lwm2mBootstrapServer("-f examples/bootstrap_server/bootstrap_server.ini",
+                                           timeout=13)
     bootstrapserver.wait_for_text(">")
     yield bootstrapserver
     bootstrapserver.quit()

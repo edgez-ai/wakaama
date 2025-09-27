@@ -36,7 +36,7 @@ static void prv_handleResponse(lwm2m_server_t * bootstrapServer,
 {
     if (COAP_204_CHANGED == message->code)
     {
-        LOG_DBG("Received ACK/2.04, Bootstrap pending, waiting for DEL/PUT from BS server...");
+        LOG("Received ACK/2.04, Bootstrap pending, waiting for DEL/PUT from BS server...");
         bootstrapServer->status = STATE_BS_PENDING;
         bootstrapServer->registration = lwm2m_gettime() + COAP_EXCHANGE_LIFETIME;
     }
@@ -55,7 +55,7 @@ static void prv_handleBootstrapReply(lwm2m_context_t * contextP,
 
     (void)contextP; /* unused */
 
-    LOG_DBG("Entering");
+    LOG("Entering");
 
     if (bootstrapServer->status == STATE_BS_INITIATED)
     {
@@ -78,7 +78,7 @@ static void prv_requestBootstrap(lwm2m_context_t * context,
     int query_length = 0;
     int res;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
 
     query_length = utils_stringCopy(query, PRV_QUERY_BUFFER_LENGTH, QUERY_STARTER QUERY_NAME);
     if (query_length < 0)
@@ -95,7 +95,8 @@ static void prv_requestBootstrap(lwm2m_context_t * context,
     query_length += res;
 
 #ifndef LWM2M_VERSION_1_0
-#if defined(LWM2M_SUPPORT_SENML_CBOR) || defined(LWM2M_SUPPORT_SENML_JSON) || defined(LWM2M_SUPPORT_TLV)
+    // TODO Add SenML CBOR as a preferred content type when supported.
+#if defined(LWM2M_SUPPORT_SENML_JSON) || defined(LWM2M_SUPPORT_TLV)
     res = utils_stringCopy(query + query_length, PRV_QUERY_BUFFER_LENGTH - query_length, QUERY_DELIMITER QUERY_PCT);
     if (res < 0)
     {
@@ -103,9 +104,7 @@ static void prv_requestBootstrap(lwm2m_context_t * context,
         return;
     }
     query_length += res;
-#if defined(LWM2M_SUPPORT_SENML_CBOR)
-    res = utils_stringCopy(query + query_length, PRV_QUERY_BUFFER_LENGTH - query_length, REG_ATTR_CONTENT_SENML_CBOR);
-#elif defined(LWM2M_SUPPORT_SENML_JSON)
+#if defined(LWM2M_SUPPORT_SENML_JSON)
     res = utils_stringCopy(query + query_length, PRV_QUERY_BUFFER_LENGTH - query_length, REG_ATTR_CONTENT_SENML_JSON);
 #elif defined(LWM2M_SUPPORT_TLV)
     res = utils_stringCopy(query + query_length, PRV_QUERY_BUFFER_LENGTH - query_length, REG_ATTR_CONTENT_TLV);
@@ -132,7 +131,7 @@ static void prv_requestBootstrap(lwm2m_context_t * context,
     {
         lwm2m_transaction_t * transaction = NULL;
 
-        LOG_DBG("Bootstrap server connection opened");
+        LOG("Bootstrap server connection opened");
 
         transaction = transaction_new(bootstrapServer->sessionH, COAP_POST, NULL, NULL, context->nextMID++, 4, NULL);
         if (transaction == NULL)
@@ -148,13 +147,13 @@ static void prv_requestBootstrap(lwm2m_context_t * context,
         context->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(context->transactionList, transaction);
         if (transaction_send(context, transaction) == 0)
         {
-            LOG_DBG("CI bootstrap requested to BS server");
+            LOG("CI bootstrap requested to BS server");
             bootstrapServer->status = STATE_BS_INITIATED;
         }
     }
     else
     {
-        LOG_DBG("Connecting bootstrap server failed");
+        LOG("Connecting bootstrap server failed");
         bootstrapServer->status = STATE_BS_FAILED;
     }
 }
@@ -192,7 +191,7 @@ static uint8_t prv_handleBootstrapDiscover(lwm2m_context_t * contextP,
 
     length = 0;
 #if !defined(LWM2M_VERSION_1_0)
-    // LwM2M 1.1.1 adds "</>;" at the beginning
+    // LWM2M 1.1.1 adds "</>;" at the beginning
     length += 4;
 #endif
     length += QUERY_VERSION_LEN + LWM2M_VERSION_LEN;
@@ -302,7 +301,7 @@ static uint8_t prv_handleBootstrapDiscover(lwm2m_context_t * contextP,
     if (*bufferP == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
 
 #if !defined(LWM2M_VERSION_1_0)
-    // LwM2M 1.1.1 adds "</>;" at the beginning
+    // LWM2M 1.1.1 adds "</>;" at the beginning
     if (length - (*lengthP) < 4) goto error;
     (*bufferP)[(*lengthP)++] = REG_URI_START;
     (*bufferP)[(*lengthP)++] = REG_PATH_SEPARATOR;
@@ -515,11 +514,11 @@ void bootstrap_step(lwm2m_context_t * contextP,
 {
     lwm2m_server_t * targetP;
 
-    LOG_DBG("entering");
+    LOG("entering");
     targetP = contextP->bootstrapServerList;
     while (targetP != NULL)
     {
-        LOG_ARG_DBG("Initial status: %s", STR_STATUS(targetP->status));
+        LOG_ARG("Initial status: %s", STR_STATUS(targetP->status));
         switch (targetP->status)
         {
         case STATE_DEREGISTERED:
@@ -581,7 +580,7 @@ void bootstrap_step(lwm2m_context_t * contextP,
         default:
             break;
         }
-        LOG_ARG_DBG("Final status: %s", STR_STATUS(targetP->status));
+        LOG_ARG("Final status: %s", STR_STATUS(targetP->status));
         targetP = targetP->next;
     }
 }
@@ -591,14 +590,14 @@ uint8_t bootstrap_handleFinish(lwm2m_context_t * context,
 {
     lwm2m_server_t * bootstrapServer;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     bootstrapServer = utils_findBootstrapServer(context, fromSessionH);
     if (bootstrapServer != NULL
      && bootstrapServer->status == STATE_BS_PENDING)
     {
         if (object_getServers(context, true) == 0)
         {
-            LOG_DBG("Bootstrap server status changed to STATE_BS_FINISHING");
+            LOG("Bootstrap server status changed to STATE_BS_FINISHING");
             bootstrapServer->status = STATE_BS_FINISHING;
             return COAP_204_CHANGED;
         }
@@ -614,14 +613,14 @@ uint8_t bootstrap_handleFinish(lwm2m_context_t * context,
 /*
  * Reset the bootstrap servers statuses
  *
- * TODO: handle LwM2M Servers the client is registered to ?
+ * TODO: handle LWM2M Servers the client is registered to ?
  *
  */
 void bootstrap_start(lwm2m_context_t * contextP)
 {
     lwm2m_server_t * targetP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     targetP = contextP->bootstrapServerList;
     while (targetP != NULL)
     {
@@ -644,7 +643,7 @@ lwm2m_status_t bootstrap_getStatus(lwm2m_context_t * contextP)
     lwm2m_server_t * targetP;
     lwm2m_status_t bs_status;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     targetP = contextP->bootstrapServerList;
     bs_status = STATE_BS_FAILED;
 
@@ -673,21 +672,26 @@ lwm2m_status_t bootstrap_getStatus(lwm2m_context_t * contextP)
         targetP = targetP->next;
     }
 
-    LOG_ARG_DBG("Returned status: %s", STR_STATUS(bs_status));
+    LOG_ARG("Returned status: %s", STR_STATUS(bs_status));
 
     return bs_status;
 }
 
 static uint8_t prv_checkServerStatus(lwm2m_server_t * serverP)
 {
-    LOG_ARG_DBG("Initial status: %s", STR_STATUS(serverP->status));
+    LOG_ARG("Initial status: %s", STR_STATUS(serverP->status));
 
     switch (serverP->status)
     {
     case STATE_BS_HOLD_OFF:
-    case STATE_BS_INITIATED: // The ACK was probably lost
         serverP->status = STATE_BS_PENDING;
-        LOG_ARG_DBG("Status changed to: %s", STR_STATUS(serverP->status));
+        LOG_ARG("Status changed to: %s", STR_STATUS(serverP->status));
+        break;
+
+    case STATE_BS_INITIATED:
+        // The ACK was probably lost
+        serverP->status = STATE_BS_PENDING;
+        LOG_ARG("Status changed to: %s", STR_STATUS(serverP->status));
         break;
 
     case STATE_DEREGISTERED:
@@ -701,7 +705,7 @@ static uint8_t prv_checkServerStatus(lwm2m_server_t * serverP)
     case STATE_BS_FAILING:
     case STATE_BS_FAILED:
     default:
-        LOG_DBG("Returning COAP_IGNORE");
+        LOG("Returning COAP_IGNORE");
         return COAP_IGNORE;
     }
 
@@ -755,8 +759,8 @@ uint8_t bootstrap_handleCommand(lwm2m_context_t * contextP,
     uint8_t result;
     lwm2m_media_type_t format;
 
-    LOG_ARG_DBG("Code: %02X", message->code);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("Code: %02X", message->code);
+    LOG_URI(uriP);
     format = utils_convertMediaType(message->content_type);
 
     result = prv_checkServerStatus(serverP);
@@ -961,7 +965,7 @@ uint8_t bootstrap_handleCommand(lwm2m_context_t * contextP,
             contextP->state = STATE_BOOTSTRAPPING;
         }
     }
-    LOG_ARG_DBG("Server status: %s", STR_STATUS(serverP->status));
+    LOG_ARG("Server status: %s", STR_STATUS(serverP->status));
 
     return result;
 }
@@ -973,7 +977,7 @@ uint8_t bootstrap_handleDeleteAll(lwm2m_context_t * contextP,
     uint8_t result;
     lwm2m_object_t * objectP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     serverP = utils_findBootstrapServer(contextP, fromSessionH);
     if (serverP == NULL) return COAP_IGNORE;
     result = prv_checkServerStatus(serverP);
@@ -1038,7 +1042,7 @@ uint8_t bootstrap_handleRequest(lwm2m_context_t * contextP,
     char * name;
     lwm2m_media_type_t format = 0;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     if (contextP->bootstrapCallback == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
     if (message->code != COAP_POST) return COAP_400_BAD_REQUEST;
     if (message->uri_query == NULL) return COAP_400_BAD_REQUEST;
@@ -1077,11 +1081,6 @@ uint8_t bootstrap_handleRequest(lwm2m_context_t * contextP,
         case LWM2M_CONTENT_SENML_JSON:
             break;
 #endif
-
-#ifdef LWM2M_SUPPORT_SENML_CBOR
-        case LWM2M_CONTENT_SENML_CBOR:
-            break;
-#endif
         default:
 #ifdef LWM2M_SUPPORT_TLV
             format = LWM2M_CONTENT_TLV;
@@ -1114,7 +1113,7 @@ void lwm2m_set_bootstrap_callback(lwm2m_context_t * contextP,
                                   lwm2m_bootstrap_callback_t callback,
                                   void * userData)
 {
-    LOG_DBG("Entering");
+    LOG("Entering");
     contextP->bootstrapCallback = callback;
     contextP->bootstrapUserData = userData;
 }
@@ -1173,7 +1172,7 @@ int lwm2m_bootstrap_delete(lwm2m_context_t * contextP,
     lwm2m_transaction_t * transaction;
     bs_data_t * dataP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     transaction = transaction_new(sessionH, COAP_DELETE, NULL, uriP, contextP->nextMID++, 4, NULL);
     if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
 
@@ -1212,7 +1211,7 @@ int lwm2m_bootstrap_write(lwm2m_context_t * contextP,
     lwm2m_transaction_t * transaction;
     bs_data_t * dataP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     if (uriP == NULL
     || buffer == NULL
     || length == 0)
@@ -1254,7 +1253,7 @@ int lwm2m_bootstrap_finish(lwm2m_context_t * contextP,
     lwm2m_transaction_t * transaction;
     bs_data_t * dataP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     transaction = transaction_new(sessionH, COAP_POST, NULL, NULL, contextP->nextMID++, 4, NULL);
     if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
 
@@ -1283,7 +1282,7 @@ int lwm2m_bootstrap_discover(lwm2m_context_t * contextP, void * sessionH, lwm2m_
     lwm2m_transaction_t * transaction;
     bs_data_t * dataP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
 
     if (uriP
      && (LWM2M_URI_IS_SET_INSTANCE(uriP)
@@ -1321,7 +1320,7 @@ int lwm2m_bootstrap_read(lwm2m_context_t * contextP, void * sessionH, lwm2m_uri_
     lwm2m_transaction_t * transaction;
     bs_data_t * dataP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
 
     if (uriP
      && (LWM2M_URI_IS_SET_RESOURCE(uriP)

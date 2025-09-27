@@ -18,16 +18,16 @@
 
 #include "internals.h"
 #include <ctype.h>
-#include <inttypes.h>
-#include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <inttypes.h>
+
 
 #ifdef LWM2M_SUPPORT_SENML_JSON
 
 #ifdef LWM2M_VERSION_1_0
-#error SenML JSON not supported with LwM2M 1.0
+#error SenML JSON not supported with LWM2M 1.0
 #endif
 
 #define PRV_JSON_BUFFER_SIZE 1024
@@ -178,9 +178,13 @@ static int prv_parseItem(const uint8_t * buffer,
                         }
                         break;
                     case LWM2M_TYPE_FLOAT:
-                        if (fpclassify(baseValue->value.asFloat) == FP_ZERO) {
+                        _Pragma("GCC diagnostic push");
+                        _Pragma("GCC diagnostic ignored \"-Wfloat-equal\"");
+                        if (baseValue->value.asFloat == 0.0)
+                        {
                             baseValue->type = LWM2M_TYPE_UNDEFINED;
                         }
+                        _Pragma("GCC diagnostic pop");
                         break;
                     default:
                         return -1;
@@ -609,8 +613,8 @@ int senml_json_parse(const lwm2m_uri_t * uriP,
     time_t baseTime;
     lwm2m_data_t baseValue;
 
-    LOG_ARG_DBG("bufferLen: %zd, buffer: \"%.*s\"", bufferLen, (int)bufferLen, STR_NULL2EMPTY((char *)buffer));
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("bufferLen: %d, buffer: \"%.*s\"", bufferLen, bufferLen, STR_NULL2EMPTY((char *)buffer));
+    LOG_URI(uriP);
     *dataP = NULL;
     recordArray = NULL;
     parsedP = NULL;
@@ -768,11 +772,11 @@ int senml_json_parse(const lwm2m_uri_t * uriP,
     count = size;
     *dataP = resultP;
 
-    LOG_ARG_DBG("Parsing successful. count: %d", count);
+    LOG_ARG("Parsing successful. count: %d", count);
     return count;
 
 error:
-    LOG_DBG("Parsing failed");
+    LOG("Parsing failed");
     if (parsedP != NULL)
     {
         lwm2m_data_free(count, parsedP);
@@ -1080,8 +1084,8 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
     const uint8_t *parentUriStr = NULL;
     size_t parentUriLen = 0;
 
-    LOG_ARG_DBG("size: %d", size);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("size: %d", size);
+    LOG_URI(uriP);
     if (size != 0 && tlvP == NULL) return -1;
 
     baseUriLen = lwm2m_uriToString(uriP, baseUriStr, URI_MAX_STRING_LEN, &baseLevel);
