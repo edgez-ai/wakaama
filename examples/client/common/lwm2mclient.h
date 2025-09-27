@@ -49,6 +49,50 @@ typedef struct {
     int addressFamily;
 } client_data_t;
 
+
+#ifdef ESP32
+ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
+    char *line = *lineptr;
+    size_t pos = 0;
+    int c;
+    
+    if (line == NULL || *n == 0) {
+        *n = 128;
+        line = (char*)malloc(*n);
+        if (line == NULL) {
+            return -1;
+        }
+        *lineptr = line;
+    }
+    
+    while ((c = fgetc(stream)) != EOF) {
+        if (pos + 1 >= *n) {
+            size_t new_size = *n * 2;
+            char *new_line = (char*)realloc(line, new_size);
+            if (new_line == NULL) {
+                return -1;
+            }
+            *n = new_size;
+            *lineptr = line = new_line;
+        }
+        
+        line[pos++] = c;
+        
+        if (c == '\n') {
+            break;
+        }
+    }
+    
+    if (pos == 0 && c == EOF) {
+        return -1;
+    }
+    
+    line[pos] = '\0';
+    return pos;
+}
+#define getline custom_getline
+#endif
+
 /*
  * object_device.c
  */
