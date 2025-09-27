@@ -36,6 +36,10 @@
 
 extern int g_reboot;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define PRV_OFFSET_MAXLEN   7 //+HH:MM\0 at max
 typedef struct
@@ -151,3 +155,7 @@ void display_security_object(lwm2m_object_t * objectP);
 void copy_security_object(lwm2m_object_t * objectDest, lwm2m_object_t * objectSrc);
 
 #endif /* LWM2MCLIENT_H_ */
+
+#ifdef __cplusplus
+}
+#endif

@@ -33,6 +33,17 @@
 #include "tinydtls/dtls.h"
 #include "liblwm2m.h"
 
+/*
+ * When included from C++ compilation units (e.g. main-esp32.cpp) we need to
+ * prevent name mangling of the symbols implemented in the C sources
+ * (dtlsconnection.c, etc.). Otherwise the linker will look for the C++
+ * mangled names and report undefined references (as observed for
+ * create_socket and connection_handle_packet).
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LWM2M_STANDARD_PORT_STR "5683"
 #define LWM2M_STANDARD_PORT      5683
 #define LWM2M_DTLS_PORT_STR     "5684"
@@ -79,5 +90,9 @@ int connection_handle_packet(dtls_connection_t *connP, uint8_t * buffer, size_t 
 
 // rehandshake a connection, useful when your NAT timed out and your client has a new IP/PORT
 int connection_rehandshake(dtls_connection_t *connP, bool sendCloseNotify);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif
