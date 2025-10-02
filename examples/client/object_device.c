@@ -52,7 +52,7 @@
 */
 
 /*
- * This object is single instance only, and is mandatory to all LWM2M device as it describe the object such as its
+ * This object supports multiple instances and is mandatory to all LWM2M device as it describe the object such as its
  * manufacturer, model, etc...
  */
 
@@ -83,6 +83,18 @@
 #define PRV_BINDING_MODE      "U"
 
 #define PRV_TLV_BUFFER_SIZE 128
+
+// Device instance data structure
+typedef struct _device_instance_
+{
+    struct _device_instance_ * next;   // matches lwm2m_list_t
+    uint16_t instanceId;               // matches lwm2m_list_t
+    int64_t battery_level;
+    int64_t free_memory;
+    int64_t error;
+    int64_t time;
+    char time_offset[8];
+} device_instance_t;
 
 // Resource Id's:
 #define RES_O_MANUFACTURER          0
@@ -152,7 +164,7 @@ static int prv_check_time_offset(char * buffer,
 }
 
 static uint8_t prv_set_value(lwm2m_data_t * dataP,
-                             device_data_t * devDataP)
+                             device_instance_t * devDataP)
 {
     lwm2m_data_t * subTlvP;
     size_t count;
@@ -360,12 +372,14 @@ static uint8_t prv_device_read(lwm2m_context_t *contextP,
 {
     uint8_t result;
     int i;
+    device_instance_t * targetP;
 
     /* unused parameter */
     (void)contextP;
 
-    // this is a single instance object
-    if (instanceId != 0)
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
     }
@@ -406,7 +420,7 @@ static uint8_t prv_device_read(lwm2m_context_t *contextP,
     i = 0;
     do
     {
-        result = prv_set_value((*dataArrayP) + i, (device_data_t*)(objectP->userData));
+        result = prv_set_value((*dataArrayP) + i, targetP);
         i++;
     } while (i < *numDataP && result == COAP_205_CONTENT);
 
@@ -421,12 +435,14 @@ static uint8_t prv_device_discover(lwm2m_context_t *contextP,
 {
     uint8_t result;
     int i;
+    device_instance_t * targetP;
 
     /* unused parameter */
     (void)contextP;
 
-    // this is a single instance object
-    if (instanceId != 0)
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
     }
@@ -507,6 +523,7 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
 {
     int i;
     uint8_t result;
+    device_instance_t * targetP;
 
     /* unused parameter */
     (void)contextP;
@@ -514,8 +531,9 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
     // All write types are treated the same here
     (void)writeType;
 
-    // this is a single instance object
-    if (instanceId != 0)
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
     }
@@ -534,9 +552,9 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
         switch (dataArray[i].id)
         {
         case RES_O_CURRENT_TIME:
-            if (1 == lwm2m_data_decode_int(dataArray + i, &((device_data_t*)(objectP->userData))->time))
+            if (1 == lwm2m_data_decode_int(dataArray + i, &targetP->time))
             {
-                ((device_data_t*)(objectP->userData))->time -= time(NULL);
+                targetP->time -= time(NULL);
                 result = COAP_204_CHANGED;
             }
             else
@@ -548,8 +566,8 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
         case RES_O_UTC_OFFSET:
             if (1 == prv_check_time_offset((char*)dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length))
             {
-                strncpy(((device_data_t*)(objectP->userData))->time_offset, (char*)dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
-                ((device_data_t*)(objectP->userData))->time_offset[dataArray[i].value.asBuffer.length] = 0;
+                strncpy(targetP->time_offset, (char*)dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
+                targetP->time_offset[dataArray[i].value.asBuffer.length] = 0;
                 result = COAP_204_CHANGED;
             }
             else
@@ -580,11 +598,14 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
                                   int length,
                                   lwm2m_object_t * objectP)
 {
+    device_instance_t * targetP;
+    
     /* unused parameter */
     (void)contextP;
 
-    // this is a single instance object
-    if (instanceId != 0)
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
     }
@@ -602,7 +623,7 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
         return COAP_204_CHANGED;
     case RES_O_RESET_ERROR_CODE:
         fprintf(stdout, "\n\t RESET ERROR CODE\r\n\n");
-        ((device_data_t*)(objectP->userData))->error = 0;
+        targetP->error = 0;
         return COAP_204_CHANGED;
     default:
         return COAP_405_METHOD_NOT_ALLOWED;
@@ -611,12 +632,18 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
 
 void display_device_object(lwm2m_object_t * object)
 {
-    device_data_t * data = (device_data_t *)object->userData;
+    device_instance_t * instanceP = (device_instance_t *)object->instanceList;
     fprintf(stdout, "  /%u: Device object:\r\n", object->objID);
-    if (NULL != data)
+    while (NULL != instanceP)
     {
-        fprintf(stdout, "    time: %lld, time_offset: %s\r\n",
-                (long long) data->time, data->time_offset);
+        fprintf(stdout, "    Instance %u: time: %lld, time_offset: %s, battery: %lld, memory: %lld, error: %lld\r\n",
+                instanceP->instanceId,
+                (long long) instanceP->time, 
+                instanceP->time_offset,
+                (long long) instanceP->battery_level,
+                (long long) instanceP->free_memory,
+                (long long) instanceP->error);
+        instanceP = instanceP->next;
     }
 }
 
@@ -639,19 +666,9 @@ lwm2m_object_t *get_object_device(void) {
         deviceObj->objID = LWM2M_DEVICE_OBJECT_ID;
 
         /*
-         * and its unique instance
-         *
+         * Initialize with empty instance list - instances will be added via device_add_instance
          */
-        deviceObj->instanceList = (lwm2m_list_t *)lwm2m_malloc(sizeof(lwm2m_list_t));
-        if (NULL != deviceObj->instanceList)
-        {
-            memset(deviceObj->instanceList, 0, sizeof(lwm2m_list_t));
-        }
-        else
-        {
-            lwm2m_free(deviceObj);
-            return NULL;
-        }
+        deviceObj->instanceList = NULL;
         
         /*
          * And the private function that will access the object.
@@ -662,25 +679,7 @@ lwm2m_object_t *get_object_device(void) {
         deviceObj->discoverFunc = prv_device_discover;
         deviceObj->writeFunc    = prv_device_write;
         deviceObj->executeFunc  = prv_device_execute;
-        deviceObj->userData = lwm2m_malloc(sizeof(device_data_t));
-
-        /*
-         * Also some user data can be stored in the object with a private structure containing the needed variables 
-         */
-        if (NULL != deviceObj->userData)
-        {
-            ((device_data_t*)deviceObj->userData)->battery_level = PRV_BATTERY_LEVEL;
-            ((device_data_t*)deviceObj->userData)->free_memory   = PRV_MEMORY_FREE;
-            ((device_data_t*)deviceObj->userData)->error = PRV_ERROR_CODE;
-            ((device_data_t*)deviceObj->userData)->time  = 1367491215;
-            strcpy(((device_data_t*)deviceObj->userData)->time_offset, "+01:00");
-        }
-        else
-        {
-            lwm2m_free(deviceObj->instanceList);
-            lwm2m_free(deviceObj);
-            deviceObj = NULL;
-        }
+        deviceObj->userData     = NULL;  // No global user data needed anymore
     }
 
     return deviceObj;
@@ -688,24 +687,31 @@ lwm2m_object_t *get_object_device(void) {
 
 void free_object_device(lwm2m_object_t * objectP)
 {
-    if (NULL != objectP->userData)
+    device_instance_t * instanceP;
+    
+    while (NULL != objectP->instanceList)
     {
-        lwm2m_free(objectP->userData);
-        objectP->userData = NULL;
-    }
-    if (NULL != objectP->instanceList)
-    {
-        lwm2m_free(objectP->instanceList);
-        objectP->instanceList = NULL;
+        instanceP = (device_instance_t *)objectP->instanceList;
+        objectP->instanceList = objectP->instanceList->next;
+        lwm2m_free(instanceP);
     }
 
     lwm2m_free(objectP);
 }
 
 uint8_t device_change(lwm2m_data_t * dataArray,
-                      lwm2m_object_t * objectP)
+                      lwm2m_object_t * objectP,
+                      uint16_t instanceId)
 {
     uint8_t result;
+    device_instance_t * targetP;
+
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
 
     switch (dataArray->id)
     {
@@ -716,7 +722,7 @@ uint8_t device_change(lwm2m_data_t * dataArray,
                 {
                     if ((0 <= value) && (100 >= value))
                     {
-                        ((device_data_t*)(objectP->userData))->battery_level = value;
+                        targetP->battery_level = value;
                         result = COAP_204_CHANGED;
                     }
                     else
@@ -731,7 +737,7 @@ uint8_t device_change(lwm2m_data_t * dataArray,
             }
             break;
         case RES_M_ERROR_CODE:
-            if (1 == lwm2m_data_decode_int(dataArray, &((device_data_t*)(objectP->userData))->error))
+            if (1 == lwm2m_data_decode_int(dataArray, &targetP->error))
             {
                 result = COAP_204_CHANGED;
             }
@@ -741,7 +747,7 @@ uint8_t device_change(lwm2m_data_t * dataArray,
             }
             break;
         case RES_O_MEMORY_FREE:
-            if (1 == lwm2m_data_decode_int(dataArray, &((device_data_t*)(objectP->userData))->free_memory))
+            if (1 == lwm2m_data_decode_int(dataArray, &targetP->free_memory))
             {
                 result = COAP_204_CHANGED;
             }
@@ -756,4 +762,129 @@ uint8_t device_change(lwm2m_data_t * dataArray,
         }
     
     return result;
+}
+
+// Add a new device instance with specified instanceId
+uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+{
+    device_instance_t * targetP;
+    
+    // Check if instance already exists
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL != targetP)
+    {
+        return COAP_406_NOT_ACCEPTABLE;  // Instance already exists
+    }
+    
+    // Create new instance
+    targetP = (device_instance_t *)lwm2m_malloc(sizeof(device_instance_t));
+    if (NULL == targetP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+    
+    memset(targetP, 0, sizeof(device_instance_t));
+    targetP->instanceId = instanceId;
+    
+    // Initialize with default values
+    targetP->battery_level = PRV_BATTERY_LEVEL;
+    targetP->free_memory = PRV_MEMORY_FREE;
+    targetP->error = PRV_ERROR_CODE;
+    targetP->time = 1367491215;
+    strcpy(targetP->time_offset, "+01:00");
+    
+    // Add to instance list
+    objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
+    
+    return COAP_201_CREATED;
+}
+
+// Remove a device instance
+uint8_t device_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+{
+    device_instance_t * targetP;
+    
+    // Find and remove the instance
+    objectP->instanceList = lwm2m_list_remove(objectP->instanceList, instanceId, (lwm2m_list_t **)&targetP);
+    
+    if (NULL == targetP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+    
+    lwm2m_free(targetP);
+    return COAP_202_DELETED;
+}
+
+// Update instance value with validation
+uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value)
+{
+    device_instance_t * targetP;
+    
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+    
+    switch (resourceId)
+    {
+    case RES_O_BATTERY_LEVEL:
+        if ((0 <= value) && (100 >= value))
+        {
+            targetP->battery_level = value;
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
+        
+    case RES_M_ERROR_CODE:
+        targetP->error = value;
+        return COAP_204_CHANGED;
+        
+    case RES_O_MEMORY_FREE:
+        if (value >= 0)
+        {
+            targetP->free_memory = value;
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
+        
+    case RES_O_CURRENT_TIME:
+        targetP->time = value;
+        return COAP_204_CHANGED;
+        
+    default:
+        return COAP_405_METHOD_NOT_ALLOWED;
+    }
+}
+
+// Update instance string value (for time offset)
+uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value)
+{
+    device_instance_t * targetP;
+    
+    // Find the requested instance
+    targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+    
+    switch (resourceId)
+    {
+    case RES_O_UTC_OFFSET:
+        if (value != NULL && strlen(value) < sizeof(targetP->time_offset))
+        {
+            if (prv_check_time_offset((char*)value, strlen(value)))
+            {
+                strcpy(targetP->time_offset, value);
+                return COAP_204_CHANGED;
+            }
+        }
+        return COAP_400_BAD_REQUEST;
+        
+    default:
+        return COAP_405_METHOD_NOT_ALLOWED;
+    }
 }

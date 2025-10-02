@@ -82,8 +82,12 @@ typedef struct
  */
 lwm2m_object_t * get_object_device(void);
 void free_object_device(lwm2m_object_t * objectP);
-uint8_t device_change(lwm2m_data_t * dataArray, lwm2m_object_t * objectP);
+uint8_t device_change(lwm2m_data_t * dataArray, lwm2m_object_t * objectP, uint16_t instanceId);
 void display_device_object(lwm2m_object_t * objectP);
+uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId);
+uint8_t device_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
+uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value);
+uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value);
 /*
  * object_firmware.c
  */

@@ -127,6 +127,37 @@ char *security_get_secret_key(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int 
     }
 }
 
+/********************* Added helper to fetch Short Server ID *******************/
+int64_t security_get_short_server_id(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId) {
+    if (obj == NULL || obj->readFunc == NULL) return -1;
+
+    int size = 1;
+    lwm2m_data_t *dataP = lwm2m_data_new(size);
+    if (dataP == NULL) return -1;
+    dataP->id = LWM2M_SECURITY_SHORT_SERVER_ID; // resource 10 in Security object
+
+    obj->readFunc(lwm2mH, instanceId, &size, &dataP, obj);
+
+    int64_t value = 0;
+    if (1 == lwm2m_data_decode_int(dataP, &value)) {
+        if (value < 0 || value > 0xFFFF) {
+            // Out of valid range 1..65535 (0 allowed only for bootstrap server per spec)
+            lwm2m_data_free(size, dataP);
+            return -1;
+        }
+        int *ret = (int*)lwm2m_malloc(sizeof(int));
+        if (ret != NULL) {
+            *ret = (int)value; // store the short server id
+        }
+        lwm2m_data_free(size, dataP);
+        return ret; // caller must free with lwm2m_free()
+    }
+
+    lwm2m_data_free(size, dataP);
+    return -1;
+}
+/********************* End Short Server ID helper ******************************/
+
 /********************* Security Obj Helpers Ends **********************/
 
 /* Returns the number sent, or -1 for errors */

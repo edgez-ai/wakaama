@@ -78,7 +78,13 @@ typedef struct _dtls_connection_t
 } dtls_connection_t;
 
 int create_socket(const char * portStr, int ai_family);
-
+char *security_get_uri(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId,
+                        char *uriBuffer, size_t bufferSize);
+char *security_get_public_id(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId,
+                                size_t *length);
+char *security_get_secret_key(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId,
+                                size_t *length);
+int64_t security_get_short_server_id(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId);
 dtls_connection_t * connection_find(dtls_connection_t * connList, const struct sockaddr_storage * addr, size_t addrLen);
 dtls_connection_t * connection_new_incoming(dtls_connection_t * connList, int sock, const struct sockaddr * addr, size_t addrLen);
 dtls_connection_t * connection_create(dtls_connection_t * connList, int sock, lwm2m_object_t * securityObj, int instanceId, lwm2m_context_t * lwm2mH, int addressFamily);
