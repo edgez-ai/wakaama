@@ -162,7 +162,7 @@ void handle_value_changed(lwm2m_context_t * lwm2mH,
                 switch (uri->objectId)
                 {
                 case LWM2M_DEVICE_OBJECT_ID:
-                    result = device_change(dataP, object);
+                    result = device_change(dataP, object, 0);
                     break;
                 default:
                     break;
