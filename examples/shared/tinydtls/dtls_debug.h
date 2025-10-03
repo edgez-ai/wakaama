@@ -24,6 +24,10 @@
 #include "global.h"
 #include "session.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef WITH_ZEPHYR
 #include <zephyr/logging/log.h>
 #endif /* WITH_ZEPHYR */
@@ -151,6 +155,10 @@ void dtls_dsrv_log_addr(log_t level, const char *name, const session_t *addr);
 #define dtls_debug(...) dsrv_log(DTLS_LOG_DEBUG, __VA_ARGS__)
 #define dtls_debug_hexdump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 1)
 #define dtls_debug_dump(name, buf, length) dtls_dsrv_hexdump_log(DTLS_LOG_DEBUG, name, buf, length, 0)
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* _DTLS_DEBUG_H_ */

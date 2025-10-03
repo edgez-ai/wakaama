@@ -65,6 +65,14 @@
 #include <ctype.h>
 #include <time.h>
 
+// Logging helper: use ESP-IDF logging if available, fallback to printf otherwise
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+#define DEVICE_LOGI(fmt, ...) ESP_LOGI("LWM2M_DEVICE", fmt, ##__VA_ARGS__)
+#else
+#define DEVICE_LOGI(fmt, ...) do { printf("[LWM2M_DEVICE] " fmt "\n", ##__VA_ARGS__); } while (0)
+#endif
+
 
 #define PRV_MANUFACTURER      "Open Mobile Alliance"
 #define PRV_MODEL_NUMBER      "Lightweight M2M Client"
@@ -93,7 +101,9 @@ typedef struct _device_instance_
     int64_t free_memory;
     int64_t error;
     int64_t time;
+    char serial_number[32];
     char time_offset[8];
+    char firmware_version[16]; // allow per-instance firmware version (was global macro)
 } device_instance_t;
 
 // Resource Id's:
@@ -175,21 +185,26 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
     case RES_O_MANUFACTURER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(PRV_MANUFACTURER, dataP);
+        DEVICE_LOGI("inst=%u READ MANUFACTURER=%s", devDataP->instanceId, PRV_MANUFACTURER);
         return COAP_205_CONTENT;
 
     case RES_O_MODEL_NUMBER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(PRV_MODEL_NUMBER, dataP);
+        DEVICE_LOGI("inst=%u READ MODEL_NUMBER=%s", devDataP->instanceId, PRV_MODEL_NUMBER);
         return COAP_205_CONTENT;
 
     case RES_O_SERIAL_NUMBER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        /* No per-instance serial number field in struct, use constant */
         lwm2m_data_encode_string(PRV_SERIAL_NUMBER, dataP);
+        DEVICE_LOGI("inst=%u READ SERIAL_NUMBER=%s", devDataP->instanceId, PRV_SERIAL_NUMBER);
         return COAP_205_CONTENT;
 
     case RES_O_FIRMWARE_VERSION:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_string(PRV_FIRMWARE_VERSION, dataP);
+        lwm2m_data_encode_string(devDataP->firmware_version, dataP);
+        DEVICE_LOGI("inst=%u READ FIRMWARE_VERSION=%s", devDataP->instanceId, devDataP->firmware_version);
         return COAP_205_CONTENT;
 
     case RES_M_REBOOT:
@@ -219,9 +234,11 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             {
             case 0:
                 lwm2m_data_encode_int(PRV_POWER_SOURCE_1, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_SOURCE[0]=%d", devDataP->instanceId, PRV_POWER_SOURCE_1);
                 break;
             case 1:
                 lwm2m_data_encode_int(PRV_POWER_SOURCE_2, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_SOURCE[1]=%d", devDataP->instanceId, PRV_POWER_SOURCE_2);
                 break;
             default:
                 return COAP_404_NOT_FOUND;
@@ -252,9 +269,11 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             {
             case 0:
                 lwm2m_data_encode_int(PRV_POWER_VOLTAGE_1, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_VOLTAGE[0]=%d", devDataP->instanceId, PRV_POWER_VOLTAGE_1);
                 break;
             case 1:
                 lwm2m_data_encode_int(PRV_POWER_VOLTAGE_2, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_VOLTAGE[1]=%d", devDataP->instanceId, PRV_POWER_VOLTAGE_2);
                 break;
             default:
                 return COAP_404_NOT_FOUND;
@@ -285,9 +304,11 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             {
             case 0:
                 lwm2m_data_encode_int(PRV_POWER_CURRENT_1, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_CURRENT[0]=%d", devDataP->instanceId, PRV_POWER_CURRENT_1);
                 break;
             case 1:
                 lwm2m_data_encode_int(PRV_POWER_CURRENT_2, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ POWER_CURRENT[1]=%d", devDataP->instanceId, PRV_POWER_CURRENT_2);
                 break;
             default:
                 return COAP_404_NOT_FOUND;
@@ -300,11 +321,13 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
     case RES_O_BATTERY_LEVEL:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_int(devDataP->battery_level, dataP);
+        DEVICE_LOGI("inst=%u READ BATTERY_LEVEL=%lld", devDataP->instanceId, (long long)devDataP->battery_level);
         return COAP_205_CONTENT;
 
     case RES_O_MEMORY_FREE:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_int(devDataP->free_memory, dataP);
+        DEVICE_LOGI("inst=%u READ MEMORY_FREE=%lld", devDataP->instanceId, (long long)devDataP->free_memory);
         return COAP_205_CONTENT;
 
     case RES_M_ERROR_CODE:
@@ -328,6 +351,7 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             {
             case 0:
                 lwm2m_data_encode_int(devDataP->error, subTlvP + i);
+                DEVICE_LOGI("inst=%u READ ERROR_CODE=%lld", devDataP->instanceId, (long long)devDataP->error);
                 break;
             default:
                 return COAP_404_NOT_FOUND;
@@ -341,22 +365,29 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
 
     case RES_O_CURRENT_TIME:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(time(NULL) + devDataP->time, dataP);
+        {
+            int64_t nowVal = time(NULL) + devDataP->time;
+            lwm2m_data_encode_int(nowVal, dataP);
+            DEVICE_LOGI("inst=%u READ CURRENT_TIME=%lld", devDataP->instanceId, (long long)nowVal);
+        }
         return COAP_205_CONTENT;
 
     case RES_O_UTC_OFFSET:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(devDataP->time_offset, dataP);
+        DEVICE_LOGI("inst=%u READ UTC_OFFSET=%s", devDataP->instanceId, devDataP->time_offset);
         return COAP_205_CONTENT;
 
     case RES_O_TIMEZONE:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(PRV_TIME_ZONE, dataP);
+        DEVICE_LOGI("inst=%u READ TIMEZONE=%s", devDataP->instanceId, PRV_TIME_ZONE);
         return COAP_205_CONTENT;
       
     case RES_M_BINDING_MODES:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(PRV_BINDING_MODE, dataP);
+        DEVICE_LOGI("inst=%u READ BINDING_MODES=%s", devDataP->instanceId, PRV_BINDING_MODE);
         return COAP_205_CONTENT;
 
     default:
@@ -580,6 +611,60 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
             //ToDo IANA TZ Format
             result = COAP_501_NOT_IMPLEMENTED;
             break;
+
+        // Added support for updating writable numeric resources on a per-instance basis
+        case RES_O_BATTERY_LEVEL:
+        {
+            int64_t value;
+            if (1 == lwm2m_data_decode_int(dataArray + i, &value))
+            {
+                if (value >= 0 && value <= 100)
+                {
+                    targetP->battery_level = value;
+                    result = COAP_204_CHANGED;
+                }
+                else
+                {
+                    result = COAP_400_BAD_REQUEST; // out of allowed range
+                }
+            }
+            else
+            {
+                result = COAP_400_BAD_REQUEST; // decode failure
+            }
+        }
+            break;
+        case RES_M_ERROR_CODE:
+            if (1 == lwm2m_data_decode_int(dataArray + i, &targetP->error))
+            {
+                result = COAP_204_CHANGED;
+            }
+            else
+            {
+                result = COAP_400_BAD_REQUEST;
+            }
+            break;
+        case RES_O_MEMORY_FREE:
+        {
+            int64_t value;
+            if (1 == lwm2m_data_decode_int(dataArray + i, &value))
+            {
+                if (value >= 0)
+                {
+                    targetP->free_memory = value;
+                    result = COAP_204_CHANGED;
+                }
+                else
+                {
+                    result = COAP_400_BAD_REQUEST; // negative memory value
+                }
+            }
+            else
+            {
+                result = COAP_400_BAD_REQUEST; // decode failure
+            }
+        }
+            break;
             
         default:
             result = COAP_405_METHOD_NOT_ALLOWED;
@@ -792,6 +877,8 @@ uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId)
     targetP->error = PRV_ERROR_CODE;
     targetP->time = 1367491215;
     strcpy(targetP->time_offset, "+01:00");
+    strncpy(targetP->firmware_version, PRV_FIRMWARE_VERSION, sizeof(targetP->firmware_version)-1);
+    targetP->firmware_version[sizeof(targetP->firmware_version)-1] = '\0';
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
@@ -873,6 +960,13 @@ uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanc
     
     switch (resourceId)
     {
+    case RES_O_SERIAL_NUMBER:
+        if (value != NULL && strlen(value) < sizeof(targetP->serial_number))
+        {
+            strcpy(targetP->serial_number, value);
+            return COAP_204_CHANGED;
+        }
+        return COAP_204_CHANGED;
     case RES_O_UTC_OFFSET:
         if (value != NULL && strlen(value) < sizeof(targetP->time_offset))
         {
@@ -887,4 +981,47 @@ uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanc
     default:
         return COAP_405_METHOD_NOT_ALLOWED;
     }
+}
+
+// Helper getters for external code wanting single-resource reads without crafting LwM2M read transactions
+int device_get_battery_level(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+{
+    device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (!targetP || !out) return -1;
+    *out = targetP->battery_level;
+    return 0;
+}
+
+int device_get_free_memory(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+{
+    device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (!targetP || !out) return -1;
+    *out = targetP->free_memory;
+    return 0;
+}
+
+int device_get_error_code(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+{
+    device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (!targetP || !out) return -1;
+    *out = targetP->error;
+    return 0;
+}
+
+int device_get_firmware_version(lwm2m_object_t * objectP, uint16_t instanceId, char *buffer, size_t bufLen)
+{
+    device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (!targetP || !buffer || bufLen == 0) return -1;
+    strncpy(buffer, targetP->firmware_version, bufLen - 1);
+    buffer[bufLen - 1] = '\0';
+    return 0;
+}
+
+int device_set_firmware_version(lwm2m_object_t * objectP, uint16_t instanceId, const char *fw)
+{
+    device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (!targetP || !fw) return -1;
+    if (strlen(fw) >= sizeof(targetP->firmware_version)) return -2; // too long
+    strcpy(targetP->firmware_version, fw);
+    return 0;
 }
