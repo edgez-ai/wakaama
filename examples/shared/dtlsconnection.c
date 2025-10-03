@@ -145,12 +145,9 @@ int64_t security_get_short_server_id(lwm2m_context_t *lwm2mH, lwm2m_object_t *ob
             lwm2m_data_free(size, dataP);
             return -1;
         }
-        int *ret = (int*)lwm2m_malloc(sizeof(int));
-        if (ret != NULL) {
-            *ret = (int)value; // store the short server id
-        }
+        
         lwm2m_data_free(size, dataP);
-        return ret; // caller must free with lwm2m_free()
+        return value; // caller must free with lwm2m_free()
     }
 
     lwm2m_data_free(size, dataP);
