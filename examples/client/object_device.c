@@ -197,8 +197,8 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
     case RES_O_SERIAL_NUMBER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         /* No per-instance serial number field in struct, use constant */
-        lwm2m_data_encode_string(PRV_SERIAL_NUMBER, dataP);
-        DEVICE_LOGI("inst=%u READ SERIAL_NUMBER=%s", devDataP->instanceId, PRV_SERIAL_NUMBER);
+        lwm2m_data_encode_string(devDataP->serial_number, dataP);
+        DEVICE_LOGI("inst=%u READ SERIAL_NUMBER=%s", devDataP->instanceId, devDataP->serial_number);
         return COAP_205_CONTENT;
 
     case RES_O_FIRMWARE_VERSION:
