@@ -244,7 +244,7 @@ uint8_t observe_handleRequest(lwm2m_context_t * contextP,
 }
 
 void observe_cancel(lwm2m_context_t * contextP,
-                    uint16_t mid,
+                    uint32_t mid,
                     void * fromSessionH)
 {
     lwm2m_observed_t * observedP;

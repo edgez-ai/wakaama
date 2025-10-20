@@ -305,8 +305,8 @@ uint8_t dm_handleRequest(lwm2m_context_t * contextP,
                 result = object_create(contextP, uriP, format, message->payload, message->payload_len);
                 if (result == COAP_201_CREATED)
                 {
-                    //longest uri is /65535/65535 = 12 + 1 (null) chars
-                    char location_path[13] = "";
+                    //longest uri is /65535/4294967294 = 20 + 1 (null) chars
+                    char location_path[21] = "";
                     //instanceId expected
                     if (!LWM2M_URI_IS_SET_INSTANCE(uriP))
                     {
@@ -314,7 +314,7 @@ uint8_t dm_handleRequest(lwm2m_context_t * contextP,
                         break;
                     }
 
-                    if (sprintf(location_path, "/%d/%d", uriP->objectId, uriP->instanceId) < 0)
+                    if (sprintf(location_path, "/%d/%lu", uriP->objectId, uriP->instanceId) < 0)
                     {
                         result = COAP_500_INTERNAL_SERVER_ERROR;
                         break;

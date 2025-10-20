@@ -396,7 +396,7 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
 }
 
 static uint8_t prv_device_read(lwm2m_context_t *contextP,
-                               uint16_t instanceId,
+                               uint32_t instanceId,
                                int * numDataP,
                                lwm2m_data_t ** dataArrayP,
                                lwm2m_object_t * objectP)
@@ -459,7 +459,7 @@ static uint8_t prv_device_read(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_device_discover(lwm2m_context_t *contextP,
-                                   uint16_t instanceId,
+                                   uint32_t instanceId,
                                    int * numDataP,
                                    lwm2m_data_t ** dataArrayP,
                                    lwm2m_object_t * objectP)
@@ -546,7 +546,7 @@ static uint8_t prv_device_discover(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_device_write(lwm2m_context_t *contextP,
-                                uint16_t instanceId,
+                                uint32_t instanceId,
                                 int numData,
                                 lwm2m_data_t * dataArray,
                                 lwm2m_object_t * objectP,
@@ -677,7 +677,7 @@ static uint8_t prv_device_write(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_device_execute(lwm2m_context_t *contextP,
-                                  uint16_t instanceId,
+                                  uint32_t instanceId,
                                   uint16_t resourceId,
                                   uint8_t * buffer,
                                   int length,
@@ -786,7 +786,7 @@ void free_object_device(lwm2m_object_t * objectP)
 
 uint8_t device_change(lwm2m_data_t * dataArray,
                       lwm2m_object_t * objectP,
-                      uint16_t instanceId)
+                      uint32_t instanceId)
 {
     uint8_t result;
     device_instance_t * targetP;
@@ -850,7 +850,7 @@ uint8_t device_change(lwm2m_data_t * dataArray,
 }
 
 // Add a new device instance with specified instanceId
-uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+uint8_t device_add_instance(lwm2m_object_t * objectP, uint32_t instanceId)
 {
     device_instance_t * targetP;
     
@@ -887,7 +887,7 @@ uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId)
 }
 
 // Remove a device instance
-uint8_t device_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+uint8_t device_remove_instance(lwm2m_object_t * objectP, uint32_t instanceId)
 {
     device_instance_t * targetP;
     
@@ -904,7 +904,7 @@ uint8_t device_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
 }
 
 // Update instance value with validation
-uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value)
+uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint32_t instanceId, uint16_t resourceId, int64_t value)
 {
     device_instance_t * targetP;
     
@@ -947,7 +947,7 @@ uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint16_t instance
 }
 
 // Update instance string value (for time offset)
-uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value)
+uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint32_t instanceId, uint16_t resourceId, const char* value)
 {
     device_instance_t * targetP;
     
@@ -984,7 +984,7 @@ uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanc
 }
 
 // Helper getters for external code wanting single-resource reads without crafting LwM2M read transactions
-int device_get_battery_level(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+int device_get_battery_level(lwm2m_object_t * objectP, uint32_t instanceId, int64_t *out)
 {
     device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (!targetP || !out) return -1;
@@ -992,7 +992,7 @@ int device_get_battery_level(lwm2m_object_t * objectP, uint16_t instanceId, int6
     return 0;
 }
 
-int device_get_free_memory(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+int device_get_free_memory(lwm2m_object_t * objectP, uint32_t instanceId, int64_t *out)
 {
     device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (!targetP || !out) return -1;
@@ -1000,7 +1000,7 @@ int device_get_free_memory(lwm2m_object_t * objectP, uint16_t instanceId, int64_
     return 0;
 }
 
-int device_get_error_code(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out)
+int device_get_error_code(lwm2m_object_t * objectP, uint32_t instanceId, int64_t *out)
 {
     device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (!targetP || !out) return -1;
@@ -1008,7 +1008,7 @@ int device_get_error_code(lwm2m_object_t * objectP, uint16_t instanceId, int64_t
     return 0;
 }
 
-int device_get_firmware_version(lwm2m_object_t * objectP, uint16_t instanceId, char *buffer, size_t bufLen)
+int device_get_firmware_version(lwm2m_object_t * objectP, uint32_t instanceId, char *buffer, size_t bufLen)
 {
     device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (!targetP || !buffer || bufLen == 0) return -1;
@@ -1017,7 +1017,7 @@ int device_get_firmware_version(lwm2m_object_t * objectP, uint16_t instanceId, c
     return 0;
 }
 
-int device_set_firmware_version(lwm2m_object_t * objectP, uint16_t instanceId, const char *fw)
+int device_set_firmware_version(lwm2m_object_t * objectP, uint32_t instanceId, const char *fw)
 {
     device_instance_t * targetP = (device_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (!targetP || !fw) return -1;

@@ -295,7 +295,7 @@ uint8_t coap_block1_handler(lwm2m_block_data_t **pBlockDataHead,
 
                             const char *uri,
 #ifdef LWM2M_RAW_BLOCK1_REQUESTS
-                            uint16_t mid,
+                            uint32_t mid,
 #endif
                             const uint8_t *buffer, size_t length, uint16_t blockSize, uint32_t blockNum, bool blockMore,
                             uint8_t **outputBuffer, size_t *outputLength) {
@@ -315,7 +315,7 @@ lwm2m_block_data_t * block2_create(lwm2m_block_data_t ** pBlockDataHead, uint16_
     return prv_block_insert(pBlockDataHead, identifier, BLOCK_2);
 }
 
-void block2_delete(lwm2m_block_data_t ** pBlockDataHead, uint16_t mid)
+void block2_delete(lwm2m_block_data_t ** pBlockDataHead, uint32_t mid)
 {
     block_data_identifier_t identifier;
     identifier.mid = mid;
@@ -323,7 +323,7 @@ void block2_delete(lwm2m_block_data_t ** pBlockDataHead, uint16_t mid)
     prv_block_data_delete(pBlockDataHead, identifier, BLOCK_2);
 }
 
-void coap_block2_set_expected_mid(lwm2m_block_data_t * blockDataHead, uint16_t currentMid, uint16_t expectedMid)
+void coap_block2_set_expected_mid(lwm2m_block_data_t * blockDataHead, uint32_t currentMid, uint32_t expectedMid)
 {
     block_data_identifier_t identifier;
     identifier.mid = currentMid;
@@ -336,7 +336,7 @@ void coap_block2_set_expected_mid(lwm2m_block_data_t * blockDataHead, uint16_t c
     blockData->identifier.mid = expectedMid;
 }
 
-uint8_t coap_block2_handler(lwm2m_block_data_t **pBlockDataHead, uint16_t mid, const uint8_t *buffer, size_t length,
+uint8_t coap_block2_handler(lwm2m_block_data_t **pBlockDataHead, uint32_t mid, const uint8_t *buffer, size_t length,
                             uint16_t blockSize, uint32_t blockNum, bool blockMore, uint8_t **outputBuffer,
                             size_t *outputLength) {
     block_data_identifier_t identifier;

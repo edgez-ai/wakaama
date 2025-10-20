@@ -737,7 +737,7 @@ uint8_t object_discover(lwm2m_context_t * contextP,
 
 bool object_isInstanceNew(lwm2m_context_t * contextP,
                           uint16_t objectId,
-                          uint16_t instanceId)
+                          uint32_t instanceId)
 {
     lwm2m_object_t * targetP;
 

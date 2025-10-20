@@ -349,7 +349,7 @@ static void prv_output_servers(lwm2m_context_t * lwm2mH,
         fprintf(stdout, "Bootstrap Servers:\r\n");
         for (targetP = lwm2mH->bootstrapServerList ; targetP != NULL ; targetP = targetP->next)
         {
-            fprintf(stdout, " - Security Object ID %d", targetP->secObjInstID);
+            fprintf(stdout, " - Security Object ID %lu", targetP->secObjInstID);
             fprintf(stdout, "\tHold Off Time: %lu s", (unsigned long)targetP->lifetime);
             fprintf(stdout, "\tstatus: ");
             switch(targetP->status)
@@ -471,7 +471,7 @@ static void prv_object_list(lwm2m_context_t * lwm2mH,
 
             for (instanceP = objectP->instanceList; instanceP != NULL ; instanceP = instanceP->next)
             {
-                fprintf(stdout, "/%d/%d  ", objectP->objID, instanceP->id);
+                fprintf(stdout, "/%d/%lu  ", objectP->objID, instanceP->id);
             }
         }
         fprintf(stdout, "\r\n");
@@ -536,7 +536,7 @@ static void prv_object_dump(lwm2m_context_t * lwm2mH,
 
         for (instanceP = objectP->instanceList; instanceP != NULL ; instanceP = instanceP->next)
         {
-            fprintf(stdout, "Instance %d:\r\n", instanceP->id);
+            fprintf(stdout, "Instance %lu:\r\n", instanceP->id);
             prv_instance_dump(lwm2mH, objectP, instanceP->id);
             fprintf(stdout, "\r\n");
         }

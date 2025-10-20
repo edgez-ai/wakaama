@@ -135,7 +135,7 @@ static uint8_t prv_get_value(lwm2m_data_t * dataP,
 }
 
 static uint8_t prv_security_read(lwm2m_context_t *contextP,
-                                 uint16_t instanceId,
+                                 uint32_t instanceId,
                                  int * numDataP,
                                  lwm2m_data_t ** dataArrayP,
                                  lwm2m_object_t * objectP)
@@ -197,7 +197,7 @@ static uint8_t prv_security_read(lwm2m_context_t *contextP,
 #ifdef LWM2M_BOOTSTRAP
 
 static uint8_t prv_security_write(lwm2m_context_t *contextP,
-                                  uint16_t instanceId,
+                                  uint32_t instanceId,
                                   int numData,
                                   lwm2m_data_t * dataArray,
                                   lwm2m_object_t * objectP,
@@ -425,7 +425,7 @@ static uint8_t prv_security_write(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_security_delete(lwm2m_context_t *contextP,
-                                   uint16_t id,
+                                   uint32_t id,
                                    lwm2m_object_t * objectP)
 {
     security_instance_t * targetP;
@@ -446,7 +446,7 @@ static uint8_t prv_security_delete(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_security_create(lwm2m_context_t *contextP,
-                                   uint16_t instanceId,
+                                   uint32_t instanceId,
                                    int numData,
                                    lwm2m_data_t * dataArray,
                                    lwm2m_object_t * objectP)

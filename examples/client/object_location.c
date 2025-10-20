@@ -168,7 +168,7 @@ static uint8_t prv_res2tlv(lwm2m_data_t* dataP,
   * @param objectP      in,     private location data structure
   */
 static uint8_t prv_location_read(lwm2m_context_t *contextP,
-                                 uint16_t objInstId,
+                                 uint32_t objInstId,
                                  int*  numDataP,
                                  lwm2m_data_t** tlvArrayP,
                                  lwm2m_object_t*  objectP)

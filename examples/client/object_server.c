@@ -77,10 +77,10 @@ typedef struct _server_instance_
 } server_instance_t;
 
 static uint8_t prv_server_delete(lwm2m_context_t *contextP,
-                                 uint16_t id,
+                                 uint32_t id,
                                  lwm2m_object_t * objectP);
 static uint8_t prv_server_create(lwm2m_context_t *contextP,
-                                 uint16_t instanceId,
+                                 uint32_t instanceId,
                                  int numData,
                                  lwm2m_data_t * dataArray,
                                  lwm2m_object_t * objectP);
@@ -225,7 +225,7 @@ static uint8_t prv_get_value(lwm2m_data_t * dataP,
 }
 
 static uint8_t prv_server_read(lwm2m_context_t *contextP,
-                               uint16_t instanceId,
+                               uint32_t instanceId,
                                int * numDataP,
                                lwm2m_data_t ** dataArrayP,
                                lwm2m_object_t * objectP)
@@ -385,7 +385,7 @@ static uint8_t prv_server_read(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_server_discover(lwm2m_context_t *contextP,
-                                   uint16_t instanceId,
+                                   uint32_t instanceId,
                                    int * numDataP,
                                    lwm2m_data_t ** dataArrayP,
                                    lwm2m_object_t * objectP)
@@ -640,7 +640,7 @@ static uint8_t prv_set_int_value(lwm2m_data_t * dataArray, uint32_t * data) {
 }
 
 static uint8_t prv_server_write(lwm2m_context_t *contextP,
-                                uint16_t instanceId,
+                                uint32_t instanceId,
                                 int numData,
                                 lwm2m_data_t * dataArray,
                                 lwm2m_object_t * objectP,
@@ -947,7 +947,7 @@ static uint8_t prv_server_write(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_server_execute(lwm2m_context_t *contextP,
-                                  uint16_t instanceId,
+                                  uint32_t instanceId,
                                   uint16_t resourceId,
                                   uint8_t * buffer,
                                   int length,
@@ -977,7 +977,7 @@ static uint8_t prv_server_execute(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_server_delete(lwm2m_context_t *contextP,
-                                 uint16_t id,
+                                 uint32_t id,
                                  lwm2m_object_t * objectP)
 {
     server_instance_t * serverInstance;
@@ -994,7 +994,7 @@ static uint8_t prv_server_delete(lwm2m_context_t *contextP,
 }
 
 static uint8_t prv_server_create(lwm2m_context_t *contextP,
-                                 uint16_t instanceId,
+                                 uint32_t instanceId,
                                  int numData,
                                  lwm2m_data_t * dataArray,
                                  lwm2m_object_t * objectP)

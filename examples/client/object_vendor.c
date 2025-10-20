@@ -21,7 +21,7 @@ static int g_vendor_data_count = 0;
 static const char *TAG = "object_vendor";
 
 // Correct callback signatures for wakaama
-static uint8_t prv_read(lwm2m_context_t *contextP, uint16_t instanceId, int *numDataP, lwm2m_data_t **dataArrayP, lwm2m_object_t *objectP) {
+static uint8_t prv_read(lwm2m_context_t *contextP, uint32_t instanceId, int *numDataP, lwm2m_data_t **dataArrayP, lwm2m_object_t *objectP) {
     for (int i = 0; i < *numDataP; i++) {
         switch ((*dataArrayP)[i].id) {
             case RID_PUBLIC_KEY:
@@ -34,7 +34,7 @@ static uint8_t prv_read(lwm2m_context_t *contextP, uint16_t instanceId, int *num
     return COAP_205_CONTENT;
 }
 
-static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP, lwm2m_write_type_t writeType) {
+static uint8_t prv_write(lwm2m_context_t *contextP, uint32_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP, lwm2m_write_type_t writeType) {
     for (int i = 0; i < numData; i++) {
         switch (dataArray[i].id) {
             case RID_PUBLIC_KEY: {
@@ -48,12 +48,12 @@ static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int num
     return COAP_204_CHANGED;
 }
 
-static uint8_t prv_execute(lwm2m_context_t *contextP, uint16_t instanceId, uint16_t resourceId, uint8_t *buffer, int length, lwm2m_object_t *objectP) {
+static uint8_t prv_execute(lwm2m_context_t *contextP, uint32_t instanceId, uint16_t resourceId, uint8_t *buffer, int length, lwm2m_object_t *objectP) {
     // No executable resources for now
     ESP_LOGI(TAG, "Execute called: instanceId=%d, resourceId=%d", instanceId, resourceId);
     return COAP_404_NOT_FOUND;
 }
-static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP) {
+static uint8_t prv_create(lwm2m_context_t *contextP, uint32_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP) {
     ESP_LOGI(TAG, "Create called: instanceId=%d", instanceId);
     for (int i = 0; i < numData; i++) {
         switch (dataArray[i].id) {

@@ -45,7 +45,7 @@ lwm2m_list_t * lwm2m_list_add(lwm2m_list_t * head,
 
 
 lwm2m_list_t * lwm2m_list_find(lwm2m_list_t * head,
-                               uint16_t id)
+                               uint32_t id)
 {
     while (NULL != head && head->id < id)
     {
@@ -59,7 +59,7 @@ lwm2m_list_t * lwm2m_list_find(lwm2m_list_t * head,
 
 
 lwm2m_list_t * lwm2m_list_remove(lwm2m_list_t * head,
-                                 uint16_t id,
+                                 uint32_t id,
                                  lwm2m_list_t ** nodeP)
 {
     lwm2m_list_t * target;
@@ -95,9 +95,9 @@ lwm2m_list_t * lwm2m_list_remove(lwm2m_list_t * head,
     return head;
 }
 
-uint16_t lwm2m_list_newId(lwm2m_list_t * head)
+uint32_t lwm2m_list_newId(lwm2m_list_t * head)
 {
-    uint16_t id;
+    uint32_t id;
     lwm2m_list_t * target;
 
     id = 0;

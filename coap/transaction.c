@@ -150,7 +150,7 @@ lwm2m_transaction_t * transaction_new(void * sessionH,
                                       coap_method_t method,
                                       char * altPath,
                                       lwm2m_uri_t * uriP,
-                                      uint16_t mID,
+                                      uint32_t mID,
                                       uint8_t token_len,
                                       uint8_t* token)
 {

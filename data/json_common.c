@@ -560,7 +560,7 @@ int json_dataStrip(int size, lwm2m_data_t * dataP, lwm2m_data_t ** resultP)
     return size;
 }
 
-lwm2m_data_t * json_findDataItem(lwm2m_data_t * listP, size_t count, uint16_t id)
+lwm2m_data_t * json_findDataItem(lwm2m_data_t * listP, size_t count, uint32_t id)
 {
     size_t i;
 

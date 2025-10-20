@@ -249,18 +249,18 @@ bool lwm2m_session_is_equal(void * session1, void * session2, void * userData);
 typedef struct _lwm2m_list_t
 {
     struct _lwm2m_list_t * next;
-    uint16_t    id;
+    uint32_t    id;
 } lwm2m_list_t;
 
 // defined in list.c
 // Add 'node' to the list 'head' and return the new list
 lwm2m_list_t * lwm2m_list_add(lwm2m_list_t * head, lwm2m_list_t * node);
 // Return the node with ID 'id' from the list 'head' or NULL if not found
-lwm2m_list_t * lwm2m_list_find(lwm2m_list_t * head, uint16_t id);
+lwm2m_list_t * lwm2m_list_find(lwm2m_list_t * head, uint32_t id);
 // Remove the node with ID 'id' from the list 'head' and return the new list
-lwm2m_list_t * lwm2m_list_remove(lwm2m_list_t * head, uint16_t id, lwm2m_list_t ** nodeP);
+lwm2m_list_t * lwm2m_list_remove(lwm2m_list_t * head, uint32_t id, lwm2m_list_t ** nodeP);
 // Return the lowest unused ID in the list 'head'. The ID 0 as return value is currently unused.
-uint16_t lwm2m_list_newId(lwm2m_list_t * head);
+uint32_t lwm2m_list_newId(lwm2m_list_t * head);
 // Free a list. Do not use if nodes contain allocated pointers as it calls lwm2m_free on nodes only.
 // If the nodes of the list need to do more than just "free()" their instances, don't use lwm2m_list_free().
 void lwm2m_list_free(lwm2m_list_t * head);
@@ -284,19 +284,19 @@ uint16_t lwm2m_get_coap_block_size(void);
  *
  */
 
-#define LWM2M_MAX_ID   ((uint16_t)0xFFFF)
+#define LWM2M_MAX_ID   ((uint32_t)0xFFFFFFFF)
 
-#define LWM2M_URI_IS_SET_OBJECT(uri) ((uri)->objectId != LWM2M_MAX_ID)
+#define LWM2M_URI_IS_SET_OBJECT(uri) ((uri)->objectId != ((uint16_t)0xFFFF))
 #define LWM2M_URI_IS_SET_INSTANCE(uri) ((uri)->instanceId != LWM2M_MAX_ID)
-#define LWM2M_URI_IS_SET_RESOURCE(uri) ((uri)->resourceId != LWM2M_MAX_ID)
+#define LWM2M_URI_IS_SET_RESOURCE(uri) ((uri)->resourceId != ((uint16_t)0xFFFF))
 #ifndef LWM2M_VERSION_1_0
-#define LWM2M_URI_IS_SET_RESOURCE_INSTANCE(uri) ((uri)->resourceInstanceId != LWM2M_MAX_ID)
+#define LWM2M_URI_IS_SET_RESOURCE_INSTANCE(uri) ((uri)->resourceInstanceId != ((uint16_t)0xFFFF))
 #endif
 
 typedef struct
 {
     uint16_t    objectId;
-    uint16_t    instanceId;
+    uint32_t    instanceId;
     uint16_t    resourceId;
 #ifndef LWM2M_VERSION_1_0
     uint16_t    resourceInstanceId;
@@ -458,17 +458,17 @@ typedef enum
     LWM2M_WRITE_REPLACE_INSTANCE,   // Write should replace the entire instance.
 } lwm2m_write_type_t;
 
-typedef uint8_t (*lwm2m_read_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, int * numDataP, lwm2m_data_t ** dataArrayP, lwm2m_object_t * objectP);
-typedef uint8_t (*lwm2m_discover_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, int * numDataP, lwm2m_data_t ** dataArrayP, lwm2m_object_t * objectP);
-typedef uint8_t (*lwm2m_write_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, int numData, lwm2m_data_t * dataArray, lwm2m_object_t * objectP, lwm2m_write_type_t writeType);
-typedef uint8_t (*lwm2m_execute_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, uint16_t resourceId, uint8_t * buffer, int length, lwm2m_object_t * objectP);
-typedef uint8_t (*lwm2m_create_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, int numData, lwm2m_data_t * dataArray, lwm2m_object_t * objectP);
+typedef uint8_t (*lwm2m_read_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, int * numDataP, lwm2m_data_t ** dataArrayP, lwm2m_object_t * objectP);
+typedef uint8_t (*lwm2m_discover_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, int * numDataP, lwm2m_data_t ** dataArrayP, lwm2m_object_t * objectP);
+typedef uint8_t (*lwm2m_write_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, int numData, lwm2m_data_t * dataArray, lwm2m_object_t * objectP, lwm2m_write_type_t writeType);
+typedef uint8_t (*lwm2m_execute_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, uint16_t resourceId, uint8_t * buffer, int length, lwm2m_object_t * objectP);
+typedef uint8_t (*lwm2m_create_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, int numData, lwm2m_data_t * dataArray, lwm2m_object_t * objectP);
 #ifdef LWM2M_RAW_BLOCK1_REQUESTS
 typedef uint8_t (*lwm2m_raw_block1_create_callback_t) (lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, int length, lwm2m_object_t * objectP, uint32_t block_num, uint8_t block_more);
 typedef uint8_t (*lwm2m_raw_block1_write_callback_t) (lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, int length, lwm2m_object_t * objectP, uint32_t block_num, uint8_t block_more);
 typedef uint8_t (*lwm2m_raw_block1_execute_callback_t) (lwm2m_context_t * contextP, lwm2m_uri_t * uriP, uint8_t * buffer, int length, lwm2m_object_t * objectP, uint32_t block_num, uint8_t block_more);
 #endif
-typedef uint8_t (*lwm2m_delete_callback_t) (lwm2m_context_t * contextP, uint16_t instanceId, lwm2m_object_t * objectP);
+typedef uint8_t (*lwm2m_delete_callback_t) (lwm2m_context_t * contextP, uint32_t instanceId, lwm2m_object_t * objectP);
 
 struct _lwm2m_object_t
 {
@@ -576,7 +576,7 @@ struct _lwm2m_block_data_
 typedef struct _lwm2m_server_
 {
     struct _lwm2m_server_ * next;         // matches lwm2m_list_t::next
-    uint16_t                secObjInstID; // matches lwm2m_list_t::id
+    uint32_t                secObjInstID; // matches lwm2m_list_t::id
     uint16_t                shortID;      // servers short ID, may be 0 for bootstrap server
     time_t                  lifetime;     // lifetime of the registration in sec or 0 if default value (86400 sec), also used as hold off time for bootstrap servers
     time_t                  registration; // date of the last registration in sec or end of client hold off time for bootstrap servers or end of hold off time for registration holds.
@@ -622,7 +622,7 @@ typedef void (*lwm2m_result_callback_t)(lwm2m_context_t *contextP, uint16_t clie
 typedef struct _lwm2m_observation_
 {
     struct _lwm2m_observation_ * next;  // matches lwm2m_list_t::next
-    uint16_t                     id;    // matches lwm2m_list_t::id
+    uint32_t                     id;    // matches lwm2m_list_t::id
     struct _lwm2m_client_ * clientP;
     lwm2m_uri_t             uri;
     lwm2m_status_t          status;     // latest user operation
@@ -665,7 +665,7 @@ typedef struct
 typedef struct _lwm2m_client_object_
 {
     struct _lwm2m_client_object_ * next; // matches lwm2m_list_t::next
-    uint16_t                 id;         // matches lwm2m_list_t::id
+    uint32_t                 id;         // matches lwm2m_list_t::id
     uint8_t                  versionMajor;
     uint8_t                  versionMinor;
     lwm2m_list_t *           instanceList;
@@ -704,7 +704,7 @@ typedef void (*lwm2m_transaction_callback_t) (lwm2m_context_t * contextP, lwm2m_
 struct _lwm2m_transaction_
 {
     lwm2m_transaction_t * next;  // matches lwm2m_list_t::next
-    uint16_t              mID;   // matches lwm2m_list_t::id
+    uint32_t              mID;   // matches lwm2m_list_t::id
     void *                peerH;
     uint8_t               ack_received; // indicates, that the ACK was received
     time_t                response_timeout; // timeout to wait for response, if token is used. When 0, use calculated acknowledge timeout.
