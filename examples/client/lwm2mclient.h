@@ -152,10 +152,12 @@ void system_reboot(void);
 /*
  * object_gateway.c
  */
+#include "object_gateway.h"
+
 lwm2m_object_t * get_object_gateway(void);
 void free_object_gateway(lwm2m_object_t * objectP);
 void display_gateway_object(lwm2m_object_t * objectP);
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId);
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type);
 uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value);
 uint8_t gateway_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value);

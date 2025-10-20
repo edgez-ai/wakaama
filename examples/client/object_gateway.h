@@ -24,23 +24,25 @@ extern "C" {
 // Gateway Management Object ID (custom)
 #define GATEWAY_OBJECT_ID 25
 
-// Gateway instance data structure
+// Connection type enumeration
+typedef enum {
+    CONNECTION_WIFI = 0,
+    CONNECTION_BLE = 1,
+    CONNECTION_LORA = 2,
+    CONNECTION_RS485 = 3
+} connection_type_t;
+
+// Gateway Device instance data structure
 typedef struct _gateway_instance_
 {
     struct _gateway_instance_ * next;   // matches lwm2m_list_t
-    uint16_t instanceId;               // matches lwm2m_list_t
+    uint16_t instanceId;               // matches lwm2m_list_t (16-bit, RW)
     
-    // Gateway-specific data
-    int64_t connected_devices;         // Number of connected devices
-    int64_t max_devices;              // Maximum number of devices supported
-    int64_t active_sessions;          // Number of active sessions
-    int64_t total_data_rx;            // Total data received (bytes)
-    int64_t total_data_tx;            // Total data transmitted (bytes)
-    int64_t uptime;                   // Gateway uptime (seconds)
-    char gateway_id[32];              // Gateway identifier
-    char firmware_version[16];        // Gateway firmware version
-    char status[16];                  // Gateway status (active/inactive/maintenance)
-    bool auto_registration;           // Auto device registration enabled
+    // Device-specific data
+    uint32_t device_id;                // 32-bit device ID (read-only)
+    connection_type_t connection_type; // Connection type enum (read-only)
+    int64_t last_seen;                 // Last seen timestamp (read-only)
+    bool online;                       // Online status (read-only)
 } gateway_instance_t;
 
 /*
@@ -51,23 +53,21 @@ void free_object_gateway(lwm2m_object_t * objectP);
 void display_gateway_object(lwm2m_object_t * objectP);
 
 // Instance management functions
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId);
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type);
 uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 
-// Value update functions
-uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value);
-uint8_t gateway_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value);
-uint8_t gateway_update_instance_bool(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, bool value);
+// Instance management functions
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type);
+uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 
 // Getter functions for external access
-int gateway_get_connected_devices(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out);
-int gateway_get_active_sessions(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out);
-int gateway_get_uptime(lwm2m_object_t * objectP, uint16_t instanceId, int64_t *out);
-int gateway_get_status(lwm2m_object_t * objectP, uint16_t instanceId, char *buffer, size_t bufLen);
+int gateway_get_device_id(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *out);
+int gateway_get_connection_type(lwm2m_object_t * objectP, uint16_t instanceId, connection_type_t *out);
+int gateway_get_last_seen(lwm2m_object_t * objectP, uint16_t instanceId, time_t *out);
+int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, bool *out);
 
-// Statistics update helpers
-uint8_t gateway_increment_rx_data(lwm2m_object_t * objectP, uint16_t instanceId, uint64_t bytes);
-uint8_t gateway_increment_tx_data(lwm2m_object_t * objectP, uint16_t instanceId, uint64_t bytes);
+// Device status update helpers
+uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instanceId, bool online);
 
 #ifdef __cplusplus
 }
