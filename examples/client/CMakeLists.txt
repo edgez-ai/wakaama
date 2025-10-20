@@ -12,6 +12,7 @@ set(SOURCES
     object_connectivity_stat.c
     object_device.c
     object_firmware.c
+    object_gateway.c
     object_location.c
     object_security.c
     object_server.c
