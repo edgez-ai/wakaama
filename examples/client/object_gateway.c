@@ -70,7 +70,10 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
     case RES_M_INSTANCE_ID:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_int(gwDataP->server_instance_id, dataP);
-        GATEWAY_LOGI("inst=%u READ INSTANCE_ID=%u", gwDataP->instanceId, gwDataP->server_instance_id);
+        // Use debug level to reduce log spam for frequent reads
+#ifdef ESP_PLATFORM
+        ESP_LOGD("LWM2M_GATEWAY", "inst=%u READ INSTANCE_ID=%u", gwDataP->instanceId, gwDataP->server_instance_id);
+#endif
         return COAP_205_CONTENT;
 
     case RES_O_CONNECTION_TYPE:
@@ -254,20 +257,44 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
                 {
                     uint16_t new_instance_id = (uint16_t)value;
                     
-                    // Update the server-assigned instance ID (this is what the server reads back)
+                    // Get callbacks from userData
+                    gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+                    
+                    // Store old values for instance recreation
+                    uint32_t device_id = targetP->device_id;
+                    connection_type_t conn_type = targetP->connection_type;
+                    uint16_t old_instanceId = targetP->instanceId;
+                    
+                    // Update the server-assigned instance ID
                     targetP->server_instance_id = new_instance_id;
                     
                     // Call the device update callback if set
-                    gateway_device_update_callback_t callback = (gateway_device_update_callback_t)objectP->userData;
-                    if (callback != NULL) {
-                        callback(targetP->device_id, new_instance_id);
-                        GATEWAY_LOGI("Device ring buffer update callback called for device serial %u", targetP->device_id);
-                    } else {
-                        GATEWAY_LOGI("No device update callback set");
+                    if (callbacks != NULL && callbacks->device_update_callback != NULL) {
+                        callbacks->device_update_callback(device_id, new_instance_id);
+                        GATEWAY_LOGI("Device ring buffer updated for device serial %u", device_id);
+                    }
+                    
+                    // Remove current instance and recreate with new instance_id
+                    // This ensures the LwM2M server sees the instance as "new" with the updated ID
+                    GATEWAY_LOGI("Recreating instance %u->%u for device %u", old_instanceId, new_instance_id, device_id);
+                    
+                    // Remove the current instance from the list
+                    objectP->instanceList = lwm2m_list_remove(objectP->instanceList, old_instanceId, (lwm2m_list_t **)&targetP);
+                    if (targetP != NULL) {
+                        lwm2m_free(targetP);
+                    }
+                    
+                    // Create a new instance with the new instance_id
+                    gateway_add_instance(objectP, new_instance_id, device_id, conn_type);
+                    
+                    // Trigger registration update to notify server of instance changes
+                    if (callbacks != NULL && callbacks->registration_update_callback != NULL) {
+                        callbacks->registration_update_callback();
+                        GATEWAY_LOGI("Registration update triggered for instance recreation");
                     }
                     
                     result = COAP_204_CHANGED;
-                    GATEWAY_LOGI("inst=%u WRITE INSTANCE_ID=%u (device updated via callback)", instanceId, new_instance_id);
+                    GATEWAY_LOGI("inst=%u WRITE INSTANCE_ID=%u (instance recreated)", old_instanceId, new_instance_id);
                 }
                 else
                 {
@@ -356,7 +383,15 @@ lwm2m_object_t *get_object_gateway(void) {
         gatewayObj->discoverFunc = prv_gateway_discover;
         gatewayObj->writeFunc    = prv_gateway_write;
         gatewayObj->executeFunc  = prv_gateway_execute;
-        gatewayObj->userData     = NULL;  // Will be set via gateway_set_device_update_callback
+        
+        // Allocate callback structure
+        gateway_callbacks_t *callbacks = (gateway_callbacks_t *)lwm2m_malloc(sizeof(gateway_callbacks_t));
+        if (callbacks != NULL) {
+            memset(callbacks, 0, sizeof(gateway_callbacks_t));
+            gatewayObj->userData = callbacks;
+        } else {
+            gatewayObj->userData = NULL;
+        }
     }
 
     return gatewayObj;
@@ -371,6 +406,11 @@ void free_object_gateway(lwm2m_object_t * objectP)
         instanceP = (gateway_instance_t *)objectP->instanceList;
         objectP->instanceList = objectP->instanceList->next;
         lwm2m_free(instanceP);
+    }
+
+    // Free callback structure
+    if (objectP->userData != NULL) {
+        lwm2m_free(objectP->userData);
     }
 
     lwm2m_free(objectP);
@@ -574,8 +614,19 @@ int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, boo
 // Set callback for device instance_id updates
 void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback)
 {
-    if (objectP != NULL) {
-        objectP->userData = (void *)callback;
+    if (objectP != NULL && objectP->userData != NULL) {
+        gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+        callbacks->device_update_callback = callback;
         GATEWAY_LOGI("Device update callback set for gateway object");
+    }
+}
+
+// Set callback for triggering registration updates
+void gateway_set_registration_update_callback(lwm2m_object_t * objectP, gateway_registration_update_callback_t callback)
+{
+    if (objectP != NULL && objectP->userData != NULL) {
+        gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+        callbacks->registration_update_callback = callback;
+        GATEWAY_LOGI("Registration update callback set for gateway object");
     }
 }
