@@ -32,14 +32,18 @@ typedef enum {
     CONNECTION_RS485 = 3
 } connection_type_t;
 
+// Callback function type for updating device instance_id in external storage
+typedef void (*gateway_device_update_callback_t)(uint32_t device_id, uint16_t new_instance_id);
+
 // Gateway Device instance data structure
 typedef struct _gateway_instance_
 {
     struct _gateway_instance_ * next;   // matches lwm2m_list_t
-    uint16_t instanceId;               // matches lwm2m_list_t (16-bit, RW)
+    uint16_t instanceId;               // matches lwm2m_list_t (16-bit, internal LwM2M instance ID)
     
     // Device-specific data
     uint32_t device_id;                // 32-bit device ID (read-only)
+    uint16_t server_instance_id;       // Server-assigned instance ID (read-write via resource 1)
     connection_type_t connection_type; // Connection type enum (read-only)
     int64_t last_seen;                 // Last seen timestamp (read-only)
     bool online;                       // Online status (read-only)
@@ -68,6 +72,9 @@ int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, boo
 
 // Device status update helpers
 uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instanceId, bool online);
+
+// Set callback for device instance_id updates
+void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback);
 
 #ifdef __cplusplus
 }

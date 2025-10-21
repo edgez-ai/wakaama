@@ -69,8 +69,8 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
 
     case RES_M_INSTANCE_ID:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(gwDataP->instanceId, dataP);
-        GATEWAY_LOGI("inst=%u READ INSTANCE_ID=%u", gwDataP->instanceId, gwDataP->instanceId);
+        lwm2m_data_encode_int(gwDataP->server_instance_id, dataP);
+        GATEWAY_LOGI("inst=%u READ INSTANCE_ID=%u", gwDataP->instanceId, gwDataP->server_instance_id);
         return COAP_205_CONTENT;
 
     case RES_O_CONNECTION_TYPE:
@@ -252,9 +252,22 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
             {
                 if (value >= 0 && value <= 65535) // 16-bit unsigned int range
                 {
-                    targetP->instanceId = (uint16_t)value;
+                    uint16_t new_instance_id = (uint16_t)value;
+                    
+                    // Update the server-assigned instance ID (this is what the server reads back)
+                    targetP->server_instance_id = new_instance_id;
+                    
+                    // Call the device update callback if set
+                    gateway_device_update_callback_t callback = (gateway_device_update_callback_t)objectP->userData;
+                    if (callback != NULL) {
+                        callback(targetP->device_id, new_instance_id);
+                        GATEWAY_LOGI("Device ring buffer update callback called for device serial %u", targetP->device_id);
+                    } else {
+                        GATEWAY_LOGI("No device update callback set");
+                    }
+                    
                     result = COAP_204_CHANGED;
-                    GATEWAY_LOGI("inst=%u WRITE INSTANCE_ID=%u", instanceId, targetP->instanceId);
+                    GATEWAY_LOGI("inst=%u WRITE INSTANCE_ID=%u (device updated via callback)", instanceId, new_instance_id);
                 }
                 else
                 {
@@ -312,9 +325,10 @@ void display_gateway_object(lwm2m_object_t * object)
     fprintf(stdout, "  /%u: Gateway object:\r\n", object->objID);
     while (NULL != instanceP)
     {
-        fprintf(stdout, "    Instance %u: device_id: %lu, conn_type: %d, online: %s, last_seen: %lld\r\n",
+        fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, online: %s, last_seen: %lld\r\n",
                 instanceP->instanceId,
                 (unsigned long)instanceP->device_id,
+                instanceP->server_instance_id,
                 instanceP->connection_type,
                 instanceP->online ? "true" : "false",
                 (long long)instanceP->last_seen);
@@ -342,7 +356,7 @@ lwm2m_object_t *get_object_gateway(void) {
         gatewayObj->discoverFunc = prv_gateway_discover;
         gatewayObj->writeFunc    = prv_gateway_write;
         gatewayObj->executeFunc  = prv_gateway_execute;
-        gatewayObj->userData     = NULL;
+        gatewayObj->userData     = NULL;  // Will be set via gateway_set_device_update_callback
     }
 
     return gatewayObj;
@@ -386,6 +400,7 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     
     // Initialize device-specific values
     targetP->device_id = device_id;
+    targetP->server_instance_id = instanceId; // Initialize with same value as instanceId
     targetP->connection_type = conn_type;
     targetP->last_seen = time(NULL);  // Current timestamp
     targetP->online = true;           // Assume online when added
@@ -450,7 +465,7 @@ uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanc
     case RES_M_INSTANCE_ID:
         if (value >= 0 && value <= 65535)
         {
-            targetP->instanceId = (uint16_t)value;
+            targetP->server_instance_id = (uint16_t)value;
             return COAP_204_CHANGED;
         }
         return COAP_400_BAD_REQUEST;
@@ -554,4 +569,13 @@ int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, boo
     if (!targetP || !out) return -1;
     *out = targetP->online;
     return 0;
+}
+
+// Set callback for device instance_id updates
+void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback)
+{
+    if (objectP != NULL) {
+        objectP->userData = (void *)callback;
+        GATEWAY_LOGI("Device update callback set for gateway object");
+    }
 }
