@@ -86,8 +86,186 @@ typedef struct
     int linkUtilization;
 } conn_m_data_t;
 
+// Extended structure for multiple instance support
+typedef struct _conn_m_instance_t
+{
+    struct _conn_m_instance_t * next;   // matches lwm2m_list_t::next
+    uint16_t shortID;                   // matches lwm2m_list_t::id
+    char ipAddresses[2][16];            // limited to 2!
+    char routerIpAddresses[2][16];      // limited to 2!
+    long cellId;
+    int signalStrength;
+    int linkQuality;
+    int linkUtilization;
+    uint32_t deviceId;                  // ID of the proxied device
+} conn_m_instance_t;
+
 static uint8_t prv_set_value(lwm2m_data_t * dataP,
                              conn_m_data_t * connDataP)
+{
+    lwm2m_data_t * subTlvP;
+    size_t count;
+    size_t i;
+
+    switch (dataP->id)
+    {
+    case RES_M_NETWORK_BEARER:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(VALUE_NETWORK_BEARER_GSM, dataP);
+        return COAP_205_CONTENT;
+
+    case RES_M_AVL_NETWORK_BEARER:
+    {
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
+        {
+            count = dataP->value.asChildren.count;
+            subTlvP = dataP->value.asChildren.array;
+        }
+        else
+        {
+            count = 1; // reduced to 1 instance to fit in one block size
+            subTlvP = lwm2m_data_new(count);
+            for (i = 0; i < count; i++) subTlvP[i].id = i;
+            lwm2m_data_encode_instances(subTlvP, count, dataP);
+        }
+
+        for (i = 0; i < count; i++)
+        {
+            switch (subTlvP[i].id)
+            {
+            case 0:
+                lwm2m_data_encode_int(VALUE_AVL_NETWORK_BEARER_1, subTlvP + i);
+                break;
+            default:
+                return COAP_404_NOT_FOUND;
+            }
+        }
+        return COAP_205_CONTENT ;
+    }
+
+    case RES_M_RADIO_SIGNAL_STRENGTH: //s-int
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(connDataP->signalStrength, dataP);
+        return COAP_205_CONTENT;
+
+    case RES_O_LINK_QUALITY: //s-int
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(connDataP->linkQuality, dataP);
+        return COAP_205_CONTENT ;
+
+    case RES_M_IP_ADDRESSES:
+    {
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
+        {
+            count = dataP->value.asChildren.count;
+            subTlvP = dataP->value.asChildren.array;
+        }
+        else
+        {
+            count = 1; // reduced to 1 instance to fit in one block size
+            subTlvP = lwm2m_data_new(count);
+            for (i = 0; i < count; i++) subTlvP[i].id = i;
+            lwm2m_data_encode_instances(subTlvP, count, dataP);
+        }
+
+        for (i = 0; i < count; i++)
+        {
+            switch (subTlvP[i].id)
+            {
+            case 0:
+                lwm2m_data_encode_string(connDataP->ipAddresses[i], subTlvP + i);
+                break;
+            default:
+                return COAP_404_NOT_FOUND;
+            }
+        }
+        return COAP_205_CONTENT ;
+    }
+
+    case RES_O_ROUTER_IP_ADDRESS:
+    {
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
+        {
+            count = dataP->value.asChildren.count;
+            subTlvP = dataP->value.asChildren.array;
+        }
+        else
+        {
+            count = 1; // reduced to 1 instance to fit in one block size
+            subTlvP = lwm2m_data_new(count);
+            for (i = 0; i < count; i++) subTlvP[i].id = i;
+            lwm2m_data_encode_instances(subTlvP, count, dataP);
+        }
+
+        for (i = 0; i < count; i++)
+        {
+            switch (subTlvP[i].id)
+            {
+            case 0:
+                lwm2m_data_encode_string(connDataP->routerIpAddresses[i], subTlvP + i);
+                break;
+            default:
+                return COAP_404_NOT_FOUND;
+            }
+        }
+        return COAP_205_CONTENT ;
+    }
+
+    case RES_O_LINK_UTILIZATION:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(connDataP->linkUtilization, dataP);
+        return COAP_205_CONTENT;
+
+    case RES_O_APN:
+    {
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
+        {
+            count = dataP->value.asChildren.count;
+            subTlvP = dataP->value.asChildren.array;
+        }
+        else
+        {
+            count = 1; // reduced to 1 instance to fit in one block size
+            subTlvP = lwm2m_data_new(count);
+            for (i = 0; i < count; i++) subTlvP[i].id = i;
+            lwm2m_data_encode_instances(subTlvP, count, dataP);
+        }
+
+        for (i = 0; i < count; i++)
+        {
+            switch (subTlvP[i].id)
+            {
+            case 0:
+                lwm2m_data_encode_string(VALUE_APN_1, subTlvP + i);
+                break;
+            default:
+                return COAP_404_NOT_FOUND;
+            }
+        }
+        return COAP_205_CONTENT;
+    }
+
+    case RES_O_CELL_ID:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(connDataP->cellId, dataP);
+        return COAP_205_CONTENT ;
+
+    case RES_O_SMNC:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(VALUE_SMNC, dataP);
+        return COAP_205_CONTENT ;
+
+    case RES_O_SMCC:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(VALUE_SMCC, dataP);
+        return COAP_205_CONTENT ;
+
+    default:
+        return COAP_404_NOT_FOUND ;
+    }
+}
+
+static uint8_t prv_set_value_extended(lwm2m_data_t * dataP, conn_m_instance_t * connDataP)
 {
     lwm2m_data_t * subTlvP;
     size_t count;
@@ -259,16 +437,63 @@ static uint8_t prv_read(lwm2m_context_t *contextP,
 {
     uint8_t result;
     int i;
+    conn_m_instance_t * targetP;
 
     /* unused parameter */
     (void)contextP;
 
-    // this is a single instance object
-    if (instanceId != 0)
+    // Try to find the instance in the extended instance list first
+    targetP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    
+    // If not found and instanceId is 0, use legacy single instance mode
+    if (NULL == targetP && instanceId == 0 && objectP->userData != NULL)
     {
-        return COAP_404_NOT_FOUND ;
+        // Use legacy single instance mode
+        // is the server asking for the full object ?
+        if (*numDataP == 0)
+        {
+            uint16_t resList[] = {
+                    RES_M_NETWORK_BEARER,
+                    RES_M_AVL_NETWORK_BEARER,
+                    RES_M_RADIO_SIGNAL_STRENGTH,
+                    RES_O_LINK_QUALITY,
+                    RES_M_IP_ADDRESSES,
+                    RES_O_ROUTER_IP_ADDRESS,
+                    RES_O_LINK_UTILIZATION,
+                    RES_O_APN,
+                    RES_O_CELL_ID,
+                    RES_O_SMNC,
+                    RES_O_SMCC
+            };
+            int nbRes = sizeof(resList) / sizeof(uint16_t);
+
+            *dataArrayP = lwm2m_data_new(nbRes);
+            if (*dataArrayP == NULL)
+                return COAP_500_INTERNAL_SERVER_ERROR ;
+            *numDataP = nbRes;
+            for (i = 0; i < nbRes; i++)
+            {
+                (*dataArrayP)[i].id = resList[i];
+            }
+        }
+
+        i = 0;
+        do
+        {
+            result = prv_set_value((*dataArrayP) + i, (conn_m_data_t*) (objectP->userData));
+            i++;
+        } while (i < *numDataP && result == COAP_205_CONTENT );
+
+        return result;
+    }
+    
+    // If still not found, return 404
+    if (NULL == targetP)
+    {
+        return COAP_404_NOT_FOUND;
     }
 
+    // Use multi-instance mode
     // is the server asking for the full object ?
     if (*numDataP == 0)
     {
@@ -300,7 +525,7 @@ static uint8_t prv_read(lwm2m_context_t *contextP,
     i = 0;
     do
     {
-        result = prv_set_value((*dataArrayP) + i, (conn_m_data_t*) (objectP->userData));
+        result = prv_set_value_extended((*dataArrayP) + i, targetP);
         i++;
     } while (i < *numDataP && result == COAP_205_CONTENT );
 
@@ -460,5 +685,111 @@ uint8_t connectivity_moni_change(lwm2m_data_t * dataArray,
     }
 
     return result;
+}
+
+// Add a new connectivity monitoring instance for a device
+uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t deviceId)
+{
+    conn_m_instance_t * instanceP;
+
+    if (NULL == objectP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+
+    // Check if instance already exists
+    instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL != instanceP)
+    {
+        return COAP_406_NOT_ACCEPTABLE; // Instance already exists
+    }
+
+    // Create new instance
+    instanceP = (conn_m_instance_t *)lwm2m_malloc(sizeof(conn_m_instance_t));
+    if (NULL == instanceP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+
+    memset(instanceP, 0, sizeof(conn_m_instance_t));
+    instanceP->shortID = instanceId;
+    instanceP->deviceId = deviceId;
+    
+    // Set default values
+    instanceP->cellId = VALUE_CELL_ID;
+    instanceP->signalStrength = VALUE_RADIO_SIGNAL_STRENGTH;
+    instanceP->linkQuality = VALUE_LINK_QUALITY;
+    instanceP->linkUtilization = VALUE_LINK_UTILIZATION;
+    strcpy(instanceP->ipAddresses[0], VALUE_IP_ADDRESS_1);
+    strcpy(instanceP->ipAddresses[1], VALUE_IP_ADDRESS_2);
+    strcpy(instanceP->routerIpAddresses[0], VALUE_ROUTER_IP_ADDRESS_1);
+    strcpy(instanceP->routerIpAddresses[1], VALUE_ROUTER_IP_ADDRESS_2);
+
+    // Add to instance list
+    objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, instanceP);
+
+    return COAP_201_CREATED;
+}
+
+// Remove a connectivity monitoring instance
+uint8_t connectivity_moni_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+{
+    conn_m_instance_t * instanceP;
+
+    if (NULL == objectP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+
+    instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == instanceP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+
+    objectP->instanceList = LWM2M_LIST_RM(objectP->instanceList, instanceId, NULL);
+    lwm2m_free(instanceP);
+
+    return COAP_202_DELETED;
+}
+
+// Update RSSI for a specific device instance
+uint8_t connectivity_moni_update_rssi(lwm2m_object_t * objectP, uint16_t instanceId, int rssi)
+{
+    conn_m_instance_t * instanceP;
+
+    if (NULL == objectP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+
+    instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == instanceP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+
+    instanceP->signalStrength = rssi;
+    return COAP_204_CHANGED;
+}
+
+// Update link quality for a specific device instance
+uint8_t connectivity_moni_update_link_quality(lwm2m_object_t * objectP, uint16_t instanceId, int linkQuality)
+{
+    conn_m_instance_t * instanceP;
+
+    if (NULL == objectP)
+    {
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+
+    instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == instanceP)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+
+    instanceP->linkQuality = linkQuality;
+    return COAP_204_CHANGED;
 }
 

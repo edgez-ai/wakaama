@@ -121,6 +121,10 @@ void copy_server_object(lwm2m_object_t * objectDest, lwm2m_object_t * objectSrc)
 lwm2m_object_t * get_object_conn_m(void);
 void free_object_conn_m(lwm2m_object_t * objectP);
 uint8_t connectivity_moni_change(lwm2m_data_t * dataArray, lwm2m_object_t * objectP);
+uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t deviceId);
+uint8_t connectivity_moni_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
+uint8_t connectivity_moni_update_rssi(lwm2m_object_t * objectP, uint16_t instanceId, int rssi);
+uint8_t connectivity_moni_update_link_quality(lwm2m_object_t * objectP, uint16_t instanceId, int linkQuality);
 
 /*
  * object_connectivity_stat.c
