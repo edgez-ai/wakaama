@@ -44,6 +44,10 @@
 #include <string.h>
 #include <ctype.h>
 
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+#endif
+
 // Resource Id's:
 #define RES_M_NETWORK_BEARER            0
 #define RES_M_AVL_NETWORK_BEARER        1
@@ -76,15 +80,7 @@
 #define VALUE_SMNC                      33
 #define VALUE_SMCC                      44
 
-typedef struct
-{
-    char ipAddresses[2][16];        // limited to 2!
-    char routerIpAddresses[2][16];  // limited to 2!
-    long cellId;
-    int signalStrength;
-    int linkQuality;
-    int linkUtilization;
-} conn_m_data_t;
+
 
 // Extended structure for multiple instance support
 typedef struct _conn_m_instance_t
@@ -100,170 +96,7 @@ typedef struct _conn_m_instance_t
     uint32_t deviceId;                  // ID of the proxied device
 } conn_m_instance_t;
 
-static uint8_t prv_set_value(lwm2m_data_t * dataP,
-                             conn_m_data_t * connDataP)
-{
-    lwm2m_data_t * subTlvP;
-    size_t count;
-    size_t i;
 
-    switch (dataP->id)
-    {
-    case RES_M_NETWORK_BEARER:
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(VALUE_NETWORK_BEARER_GSM, dataP);
-        return COAP_205_CONTENT;
-
-    case RES_M_AVL_NETWORK_BEARER:
-    {
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
-        {
-            count = dataP->value.asChildren.count;
-            subTlvP = dataP->value.asChildren.array;
-        }
-        else
-        {
-            count = 1; // reduced to 1 instance to fit in one block size
-            subTlvP = lwm2m_data_new(count);
-            for (i = 0; i < count; i++) subTlvP[i].id = i;
-            lwm2m_data_encode_instances(subTlvP, count, dataP);
-        }
-
-        for (i = 0; i < count; i++)
-        {
-            switch (subTlvP[i].id)
-            {
-            case 0:
-                lwm2m_data_encode_int(VALUE_AVL_NETWORK_BEARER_1, subTlvP + i);
-                break;
-            default:
-                return COAP_404_NOT_FOUND;
-            }
-        }
-        return COAP_205_CONTENT ;
-    }
-
-    case RES_M_RADIO_SIGNAL_STRENGTH: //s-int
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(connDataP->signalStrength, dataP);
-        return COAP_205_CONTENT;
-
-    case RES_O_LINK_QUALITY: //s-int
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(connDataP->linkQuality, dataP);
-        return COAP_205_CONTENT ;
-
-    case RES_M_IP_ADDRESSES:
-    {
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
-        {
-            count = dataP->value.asChildren.count;
-            subTlvP = dataP->value.asChildren.array;
-        }
-        else
-        {
-            count = 1; // reduced to 1 instance to fit in one block size
-            subTlvP = lwm2m_data_new(count);
-            for (i = 0; i < count; i++) subTlvP[i].id = i;
-            lwm2m_data_encode_instances(subTlvP, count, dataP);
-        }
-
-        for (i = 0; i < count; i++)
-        {
-            switch (subTlvP[i].id)
-            {
-            case 0:
-                lwm2m_data_encode_string(connDataP->ipAddresses[i], subTlvP + i);
-                break;
-            default:
-                return COAP_404_NOT_FOUND;
-            }
-        }
-        return COAP_205_CONTENT ;
-    }
-
-    case RES_O_ROUTER_IP_ADDRESS:
-    {
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
-        {
-            count = dataP->value.asChildren.count;
-            subTlvP = dataP->value.asChildren.array;
-        }
-        else
-        {
-            count = 1; // reduced to 1 instance to fit in one block size
-            subTlvP = lwm2m_data_new(count);
-            for (i = 0; i < count; i++) subTlvP[i].id = i;
-            lwm2m_data_encode_instances(subTlvP, count, dataP);
-        }
-
-        for (i = 0; i < count; i++)
-        {
-            switch (subTlvP[i].id)
-            {
-            case 0:
-                lwm2m_data_encode_string(connDataP->routerIpAddresses[i], subTlvP + i);
-                break;
-            default:
-                return COAP_404_NOT_FOUND;
-            }
-        }
-        return COAP_205_CONTENT ;
-    }
-
-    case RES_O_LINK_UTILIZATION:
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(connDataP->linkUtilization, dataP);
-        return COAP_205_CONTENT;
-
-    case RES_O_APN:
-    {
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE)
-        {
-            count = dataP->value.asChildren.count;
-            subTlvP = dataP->value.asChildren.array;
-        }
-        else
-        {
-            count = 1; // reduced to 1 instance to fit in one block size
-            subTlvP = lwm2m_data_new(count);
-            for (i = 0; i < count; i++) subTlvP[i].id = i;
-            lwm2m_data_encode_instances(subTlvP, count, dataP);
-        }
-
-        for (i = 0; i < count; i++)
-        {
-            switch (subTlvP[i].id)
-            {
-            case 0:
-                lwm2m_data_encode_string(VALUE_APN_1, subTlvP + i);
-                break;
-            default:
-                return COAP_404_NOT_FOUND;
-            }
-        }
-        return COAP_205_CONTENT;
-    }
-
-    case RES_O_CELL_ID:
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(connDataP->cellId, dataP);
-        return COAP_205_CONTENT ;
-
-    case RES_O_SMNC:
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(VALUE_SMNC, dataP);
-        return COAP_205_CONTENT ;
-
-    case RES_O_SMCC:
-        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_int(VALUE_SMCC, dataP);
-        return COAP_205_CONTENT ;
-
-    default:
-        return COAP_404_NOT_FOUND ;
-    }
-}
 
 static uint8_t prv_set_value_extended(lwm2m_data_t * dataP, conn_m_instance_t * connDataP)
 {
@@ -442,58 +275,37 @@ static uint8_t prv_read(lwm2m_context_t *contextP,
     /* unused parameter */
     (void)contextP;
 
-    // Try to find the instance in the extended instance list first
+    // Always use multi-instance mode - find the instance in the extended instance list
     targetP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     
-    // If not found and instanceId is 0, use legacy single instance mode
-    if (NULL == targetP && instanceId == 0 && objectP->userData != NULL)
-    {
-        // Use legacy single instance mode
-        // is the server asking for the full object ?
-        if (*numDataP == 0)
-        {
-            uint16_t resList[] = {
-                    RES_M_NETWORK_BEARER,
-                    RES_M_AVL_NETWORK_BEARER,
-                    RES_M_RADIO_SIGNAL_STRENGTH,
-                    RES_O_LINK_QUALITY,
-                    RES_M_IP_ADDRESSES,
-                    RES_O_ROUTER_IP_ADDRESS,
-                    RES_O_LINK_UTILIZATION,
-                    RES_O_APN,
-                    RES_O_CELL_ID,
-                    RES_O_SMNC,
-                    RES_O_SMCC
-            };
-            int nbRes = sizeof(resList) / sizeof(uint16_t);
-
-            *dataArrayP = lwm2m_data_new(nbRes);
-            if (*dataArrayP == NULL)
-                return COAP_500_INTERNAL_SERVER_ERROR ;
-            *numDataP = nbRes;
-            for (i = 0; i < nbRes; i++)
-            {
-                (*dataArrayP)[i].id = resList[i];
-            }
-        }
-
-        i = 0;
-        do
-        {
-            result = prv_set_value((*dataArrayP) + i, (conn_m_data_t*) (objectP->userData));
-            i++;
-        } while (i < *numDataP && result == COAP_205_CONTENT );
-
-        return result;
-    }
-    
-    // If still not found, return 404
+    // If not found, return 404
     if (NULL == targetP)
     {
+        // Debug: Log which instances are available
+#ifdef ESP_PLATFORM
+        ESP_LOGW("CONN_MONI", "Instance %u not found. Available instances:", instanceId);
+#else
+        printf("CONN_MONI: Instance %u not found. Available instances:\n", instanceId);
+#endif
+        conn_m_instance_t * debugP = (conn_m_instance_t *)objectP->instanceList;
+        int count = 0;
+        while (debugP != NULL) {
+#ifdef ESP_PLATFORM
+            ESP_LOGW("CONN_MONI", "  Instance %u (device %u)", debugP->shortID, debugP->deviceId);
+#else
+            printf("CONN_MONI:   Instance %u (device %u)\n", debugP->shortID, debugP->deviceId);
+#endif
+            debugP = debugP->next;
+            count++;
+        }
+#ifdef ESP_PLATFORM
+        ESP_LOGW("CONN_MONI", "Total instances: %d", count);
+#else
+        printf("CONN_MONI: Total instances: %d\n", count);
+#endif
         return COAP_404_NOT_FOUND;
     }
 
-    // Use multi-instance mode
     // is the server asking for the full object ?
     if (*numDataP == 0)
     {
@@ -538,6 +350,7 @@ lwm2m_object_t * get_object_conn_m(void)
      * The get_object_conn_m() function create the object itself and return a pointer to the structure that represent it.
      */
     lwm2m_object_t * connObj;
+    conn_m_instance_t * instanceP;
 
     connObj = (lwm2m_object_t *) lwm2m_malloc(sizeof(lwm2m_object_t));
 
@@ -551,19 +364,9 @@ lwm2m_object_t * get_object_conn_m(void)
         connObj->objID = LWM2M_CONN_MONITOR_OBJECT_ID;
         
         /*
-         * and its unique instance
-         *
+         * Initialize empty instance list - instances will be added via connectivity_moni_add_instance
          */
-        connObj->instanceList = (lwm2m_list_t *)lwm2m_malloc(sizeof(lwm2m_list_t));
-        if (NULL != connObj->instanceList)
-        {
-            memset(connObj->instanceList, 0, sizeof(lwm2m_list_t));
-        }
-        else
-        {
-            lwm2m_free(connObj);
-            return NULL;
-        }
+        connObj->instanceList = NULL;
         
         /*
          * And the private function that will access the object.
@@ -572,27 +375,33 @@ lwm2m_object_t * get_object_conn_m(void)
          */
         connObj->readFunc = prv_read;
         connObj->executeFunc = NULL;
-        connObj->userData = lwm2m_malloc(sizeof(conn_m_data_t));
-
-        /*
-         * Also some user data can be stored in the object with a private structure containing the needed variables
-         */
-        if (NULL != connObj->userData)
+        connObj->userData = NULL;  // Use multi-instance mode only
+        
+        // Always create default instance 0 for the gateway itself
+        instanceP = (conn_m_instance_t *)lwm2m_malloc(sizeof(conn_m_instance_t));
+        if (NULL != instanceP)
         {
-            conn_m_data_t *myData = (conn_m_data_t*) connObj->userData;
-            myData->cellId          = VALUE_CELL_ID;
-            myData->signalStrength  = VALUE_RADIO_SIGNAL_STRENGTH;
-            myData->linkQuality     = VALUE_LINK_QUALITY;
-            myData->linkUtilization = VALUE_LINK_UTILIZATION;
-            strcpy(myData->ipAddresses[0],       VALUE_IP_ADDRESS_1);
-            strcpy(myData->ipAddresses[1],       VALUE_IP_ADDRESS_2);
-            strcpy(myData->routerIpAddresses[0], VALUE_ROUTER_IP_ADDRESS_1);
-            strcpy(myData->routerIpAddresses[1], VALUE_ROUTER_IP_ADDRESS_2);
+            memset(instanceP, 0, sizeof(conn_m_instance_t));
+            instanceP->shortID = 0;
+            instanceP->deviceId = 0;  // Gateway device ID
+            
+            // Set default values
+            instanceP->cellId = VALUE_CELL_ID;
+            instanceP->signalStrength = VALUE_RADIO_SIGNAL_STRENGTH;
+            instanceP->linkQuality = VALUE_LINK_QUALITY;
+            instanceP->linkUtilization = VALUE_LINK_UTILIZATION;
+            strcpy(instanceP->ipAddresses[0], VALUE_IP_ADDRESS_1);
+            strcpy(instanceP->ipAddresses[1], VALUE_IP_ADDRESS_2);
+            strcpy(instanceP->routerIpAddresses[0], VALUE_ROUTER_IP_ADDRESS_1);
+            strcpy(instanceP->routerIpAddresses[1], VALUE_ROUTER_IP_ADDRESS_2);
+            
+            // Add to instance list
+            connObj->instanceList = LWM2M_LIST_ADD(connObj->instanceList, instanceP);
         }
         else
         {
             lwm2m_free(connObj);
-            connObj = NULL;
+            return NULL;
         }
     }
     return connObj;
@@ -600,91 +409,25 @@ lwm2m_object_t * get_object_conn_m(void)
 
 void free_object_conn_m(lwm2m_object_t * objectP)
 {
+    // Free all instances
+    conn_m_instance_t * instanceP = (conn_m_instance_t *)objectP->instanceList;
+    while (instanceP != NULL)
+    {
+        conn_m_instance_t * nextP = instanceP->next;
+        lwm2m_free(instanceP);
+        instanceP = nextP;
+    }
+    
     lwm2m_free(objectP->userData);
-    lwm2m_list_free(objectP->instanceList);
     lwm2m_free(objectP);
 }
 
 uint8_t connectivity_moni_change(lwm2m_data_t * dataArray,
                                  lwm2m_object_t * objectP)
 {
-    int64_t value;
-    uint8_t result;
-    conn_m_data_t * data;
-
-    data = (conn_m_data_t*) (objectP->userData);
-
-    switch (dataArray->id)
-    {
-    case RES_M_RADIO_SIGNAL_STRENGTH:
-        if (1 == lwm2m_data_decode_int(dataArray, &value))
-        {
-            data->signalStrength = value;
-            result = COAP_204_CHANGED;
-        }
-        else
-        {
-            result = COAP_400_BAD_REQUEST;
-        }
-        break;
-
-    case RES_O_LINK_QUALITY:
-        if (1 == lwm2m_data_decode_int(dataArray, &value))
-        {
-            data->linkQuality = value;
-            result = COAP_204_CHANGED;
-        }
-        else
-        {
-            result = COAP_400_BAD_REQUEST;
-        }
-        break;
-
-    case RES_M_IP_ADDRESSES:
-        if (sizeof(data->ipAddresses[0]) <= dataArray->value.asBuffer.length)
-        {
-            result = COAP_400_BAD_REQUEST;
-        }
-        else
-        {
-            memset(data->ipAddresses[0], 0, sizeof(data->ipAddresses[0]));
-            memcpy(data->ipAddresses[0], dataArray->value.asBuffer.buffer, dataArray->value.asBuffer.length);
-            data->ipAddresses[0][dataArray->value.asBuffer.length] = 0;
-            result = COAP_204_CHANGED;
-        }
-        break;
-
-    case RES_O_ROUTER_IP_ADDRESS:
-        if (sizeof(data->routerIpAddresses[0]) <= dataArray->value.asBuffer.length)
-        {
-            result = COAP_400_BAD_REQUEST;
-        }
-        else
-        {
-            memset(data->routerIpAddresses[0], 0, sizeof(data->routerIpAddresses[0]));
-            memcpy(data->routerIpAddresses[0], dataArray->value.asBuffer.buffer, dataArray->value.asBuffer.length);
-            data->routerIpAddresses[0][dataArray->value.asBuffer.length] = 0;
-            result = COAP_204_CHANGED;
-        }
-        break;
-
-    case RES_O_CELL_ID:
-        if (1 == lwm2m_data_decode_int(dataArray, &value))
-        {
-            data->cellId = value;
-            result = COAP_204_CHANGED;
-        }
-        else
-        {
-            result = COAP_400_BAD_REQUEST;
-        }
-        break;
-
-    default:
-        result = COAP_405_METHOD_NOT_ALLOWED;
-    }
-
-    return result;
+    // This function is deprecated in multi-instance mode
+    // Use connectivity_moni_update_* functions instead
+    return COAP_405_METHOD_NOT_ALLOWED;
 }
 
 // Add a new connectivity monitoring instance for a device
@@ -694,6 +437,11 @@ uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instan
 
     if (NULL == objectP)
     {
+#ifdef ESP_PLATFORM
+        ESP_LOGE("CONN_MONI", "Object pointer is NULL");
+#else
+        printf("CONN_MONI ERROR: Object pointer is NULL\n");
+#endif
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
 
@@ -701,13 +449,36 @@ uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instan
     instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (NULL != instanceP)
     {
-        return COAP_406_NOT_ACCEPTABLE; // Instance already exists
+#ifdef ESP_PLATFORM
+        ESP_LOGW("CONN_MONI", "Instance %u already exists for device %u (existing device %u)", 
+                 instanceId, deviceId, instanceP->deviceId);
+#else
+        printf("CONN_MONI WARN: Instance %u already exists for device %u (existing device %u)\n", 
+               instanceId, deviceId, instanceP->deviceId);
+#endif
+        
+        // If it's the same device, just update and return success
+        if (instanceP->deviceId == deviceId) {
+#ifdef ESP_PLATFORM
+            ESP_LOGI("CONN_MONI", "Instance %u already exists for same device %u, skipping", instanceId, deviceId);
+#else
+            printf("CONN_MONI INFO: Instance %u already exists for same device %u, skipping\n", instanceId, deviceId);
+#endif
+            return COAP_204_CHANGED; // Changed instead of error
+        }
+        
+        return COAP_406_NOT_ACCEPTABLE; // Instance already exists for different device
     }
 
     // Create new instance
     instanceP = (conn_m_instance_t *)lwm2m_malloc(sizeof(conn_m_instance_t));
     if (NULL == instanceP)
     {
+#ifdef ESP_PLATFORM
+        ESP_LOGE("CONN_MONI", "Failed to allocate memory for instance %u", instanceId);
+#else
+        printf("CONN_MONI ERROR: Failed to allocate memory for instance %u\n", instanceId);
+#endif
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
 
@@ -728,6 +499,11 @@ uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instan
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, instanceP);
 
+#ifdef ESP_PLATFORM
+    ESP_LOGI("CONN_MONI", "Created connectivity monitoring instance %u for device %u", instanceId, deviceId);
+#else
+    printf("CONN_MONI INFO: Created connectivity monitoring instance %u for device %u\n", instanceId, deviceId);
+#endif
     return COAP_201_CREATED;
 }
 
@@ -738,15 +514,31 @@ uint8_t connectivity_moni_remove_instance(lwm2m_object_t * objectP, uint16_t ins
 
     if (NULL == objectP)
     {
+#ifdef ESP_PLATFORM
+        ESP_LOGE("CONN_MONI", "Object pointer is NULL when removing instance %u", instanceId);
+#else
+        printf("CONN_MONI ERROR: Object pointer is NULL when removing instance %u\n", instanceId);
+#endif
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
 
     instanceP = (conn_m_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (NULL == instanceP)
     {
+#ifdef ESP_PLATFORM
+        ESP_LOGW("CONN_MONI", "Instance %u not found for removal", instanceId);
+#else
+        printf("CONN_MONI WARN: Instance %u not found for removal\n", instanceId);
+#endif
         return COAP_404_NOT_FOUND;
     }
 
+#ifdef ESP_PLATFORM
+    ESP_LOGI("CONN_MONI", "Removing connectivity monitoring instance %u (device %u)", instanceId, instanceP->deviceId);
+#else
+    printf("CONN_MONI INFO: Removing connectivity monitoring instance %u (device %u)\n", instanceId, instanceP->deviceId);
+#endif
+    
     objectP->instanceList = LWM2M_LIST_RM(objectP->instanceList, instanceId, NULL);
     lwm2m_free(instanceP);
 
@@ -791,5 +583,47 @@ uint8_t connectivity_moni_update_link_quality(lwm2m_object_t * objectP, uint16_t
 
     instanceP->linkQuality = linkQuality;
     return COAP_204_CHANGED;
+}
+
+// Debug function to list all connectivity monitoring instances
+void connectivity_moni_debug_instances(lwm2m_object_t * objectP)
+{
+    if (NULL == objectP) {
+#ifdef ESP_PLATFORM
+        ESP_LOGW("CONN_MONI", "Debug: Object pointer is NULL");
+#else
+        printf("CONN_MONI WARN: Debug: Object pointer is NULL\n");
+#endif
+        return;
+    }
+    
+    conn_m_instance_t * instanceP = (conn_m_instance_t *)objectP->instanceList;
+    int count = 0;
+    
+#ifdef ESP_PLATFORM
+    ESP_LOGI("CONN_MONI", "=== Connectivity Monitoring Instances ===");
+#else
+    printf("CONN_MONI INFO: === Connectivity Monitoring Instances ===\n");
+#endif
+    while (instanceP != NULL) {
+#ifdef ESP_PLATFORM
+        ESP_LOGI("CONN_MONI", "Instance %u: device_id=%u, rssi=%d, quality=%d", 
+                 instanceP->shortID, instanceP->deviceId, 
+                 instanceP->signalStrength, instanceP->linkQuality);
+#else
+        printf("CONN_MONI INFO: Instance %u: device_id=%u, rssi=%d, quality=%d\n", 
+               instanceP->shortID, instanceP->deviceId, 
+               instanceP->signalStrength, instanceP->linkQuality);
+#endif
+        instanceP = instanceP->next;
+        count++;
+    }
+#ifdef ESP_PLATFORM
+    ESP_LOGI("CONN_MONI", "Total instances: %d", count);
+    ESP_LOGI("CONN_MONI", "=========================================");
+#else
+    printf("CONN_MONI INFO: Total instances: %d\n", count);
+    printf("CONN_MONI INFO: =========================================\n");
+#endif
 }
 

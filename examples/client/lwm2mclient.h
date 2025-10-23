@@ -125,6 +125,7 @@ uint8_t connectivity_moni_add_instance(lwm2m_object_t * objectP, uint16_t instan
 uint8_t connectivity_moni_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 uint8_t connectivity_moni_update_rssi(lwm2m_object_t * objectP, uint16_t instanceId, int rssi);
 uint8_t connectivity_moni_update_link_quality(lwm2m_object_t * objectP, uint16_t instanceId, int linkQuality);
+void connectivity_moni_debug_instances(lwm2m_object_t * objectP);
 
 /*
  * object_connectivity_stat.c
