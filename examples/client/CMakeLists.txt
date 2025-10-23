@@ -17,6 +17,13 @@ set(SOURCES
     object_security.c
     object_server.c
     object_test.c
+    object_vendor.c
+    object_wot_thing.c
+    object_wot_data_feature.c
+    object_wot_action.c
+    object_wot_event.c
+    wot_bootstrap_config.c
+    wot_bootstrap_example.c
     system_api.c
 )
 
