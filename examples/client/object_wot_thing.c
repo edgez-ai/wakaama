@@ -187,19 +187,26 @@ static uint8_t prv_read(lwm2m_context_t *contextP, uint16_t instanceId, int *num
 static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int numData, 
                          lwm2m_data_t *dataArray, lwm2m_object_t *objectP, lwm2m_write_type_t writeType)
 {
+    ESP_LOGI(TAG, "🔽 BOOTSTRAP WRITE - WoT Thing Object (26250) - Instance %d, Resources: %d, WriteType: %d", 
+             instanceId, numData, writeType);
+    
     wot_thing_instance_t *instanceP = prv_find_instance(objectP, instanceId);
     
     if (instanceP == NULL)
     {
+        ESP_LOGW(TAG, "🔽 BOOTSTRAP WRITE - Instance %d not found, returning 404", instanceId);
         return COAP_404_NOT_FOUND;
     }
     
     for (int i = 0; i < numData; i++)
     {
+        ESP_LOGI(TAG, "🔽 BOOTSTRAP WRITE - Resource %d, Type: %d", dataArray[i].id, dataArray[i].type);
+        
         switch (dataArray[i].id)
         {
             case RES_WOT_THING_IDENTIFIER:
                 // Read-only resource
+                ESP_LOGW(TAG, "🔽 BOOTSTRAP WRITE - Attempt to write read-only Thing Identifier");
                 return COAP_405_METHOD_NOT_ALLOWED;
                 
             case RES_WOT_THING_TITLE:
@@ -210,6 +217,7 @@ static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int num
                     memcpy(instanceP->title, dataArray[i].value.asBuffer.buffer, len);
                     instanceP->title[len] = '\0';
                     instanceP->last_updated = time(NULL);
+                    ESP_LOGI(TAG, "🔽 BOOTSTRAP WRITE - Thing Title set to: %s", instanceP->title);
                 }
                 else
                 {
@@ -320,18 +328,23 @@ static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int num
 static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int numData, 
                           lwm2m_data_t *dataArray, lwm2m_object_t *objectP)
 {
+    ESP_LOGI(TAG, "🔽 BOOTSTRAP CREATE - WoT Thing Object (26250) - Instance %d, Resources: %d", 
+             instanceId, numData);
+    
     wot_thing_instance_t *instanceP;
     uint8_t result;
     
     instanceP = prv_find_instance(objectP, instanceId);
     if (instanceP != NULL)
     {
+        ESP_LOGW(TAG, "🔽 BOOTSTRAP CREATE - Instance %d already exists", instanceId);
         return COAP_406_NOT_ACCEPTABLE;
     }
     
     instanceP = prv_create_instance(instanceId);
     if (instanceP == NULL)
     {
+        ESP_LOGE(TAG, "🔽 BOOTSTRAP CREATE - Failed to create instance %d", instanceId);
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
     
