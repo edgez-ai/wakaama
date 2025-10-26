@@ -55,6 +55,30 @@
 #define RES_O_LAST_SEEN             3
 #define RES_O_ONLINE                4
 
+// Helper function to find instance by server_instance_id
+static gateway_instance_t * prv_find_by_server_instance_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
+{
+    gateway_instance_t * instanceP = (gateway_instance_t *)objectP->instanceList;
+    
+    GATEWAY_LOGI("Searching for server_instance_id=%u", server_instance_id);
+    
+    while (instanceP != NULL)
+    {
+        GATEWAY_LOGI("Checking instance: internal_id=%u, server_id=%u, device_id=%u", 
+                    instanceP->instanceId, instanceP->server_instance_id, instanceP->device_id);
+        
+        if (instanceP->server_instance_id == server_instance_id)
+        {
+            GATEWAY_LOGI("Found match for server_instance_id=%u", server_instance_id);
+            return instanceP;
+        }
+        instanceP = instanceP->next;
+    }
+    
+    GATEWAY_LOGI("No match found for server_instance_id=%u", server_instance_id);
+    return NULL;
+}
+
 static uint8_t prv_set_value(lwm2m_data_t * dataP,
                              gateway_instance_t * gwDataP)
 {
@@ -71,9 +95,8 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_int(gwDataP->server_instance_id, dataP);
         // Use debug level to reduce log spam for frequent reads
-#ifdef ESP_PLATFORM
-        ESP_LOGD("LWM2M_GATEWAY", "inst=%u READ INSTANCE_ID=%u", gwDataP->instanceId, gwDataP->server_instance_id);
-#endif
+        GATEWAY_LOGI("inst=%u READ INSTANCE_ID=%u (internal_id=%u, device_id=%u)", 
+                    gwDataP->instanceId, gwDataP->server_instance_id, gwDataP->instanceId, gwDataP->device_id);
         return COAP_205_CONTENT;
 
     case RES_O_CONNECTION_TYPE:
@@ -112,10 +135,23 @@ static uint8_t prv_gateway_read(lwm2m_context_t *contextP,
     /* unused parameter */
     (void)contextP;
 
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    GATEWAY_LOGI("READ requested for instanceId=%u", instanceId);
+
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
     if (NULL == targetP)
     {
+        GATEWAY_LOGI("Not found by server_instance_id, trying internal instanceId=%u", instanceId);
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+        if (targetP != NULL) {
+            GATEWAY_LOGI("Found by internal instanceId=%u (server_id=%u)", instanceId, targetP->server_instance_id);
+        }
+    }
+    
+    if (NULL == targetP)
+    {
+        GATEWAY_LOGI("Instance not found: instanceId=%u", instanceId);
         return COAP_404_NOT_FOUND;
     }
 
@@ -163,8 +199,14 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
     /* unused parameter */
     (void)contextP;
 
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
@@ -228,10 +270,23 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
     (void)contextP;
     (void)writeType;
 
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    GATEWAY_LOGI("WRITE requested for instanceId=%u, numData=%d", instanceId, numData);
+
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
     if (NULL == targetP)
     {
+        GATEWAY_LOGI("Not found by server_instance_id, trying internal instanceId=%u", instanceId);
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+        if (targetP != NULL) {
+            GATEWAY_LOGI("Found by internal instanceId=%u (server_id=%u)", instanceId, targetP->server_instance_id);
+        }
+    }
+    
+    if (NULL == targetP)
+    {
+        GATEWAY_LOGI("Instance not found for WRITE: instanceId=%u", instanceId);
         return COAP_404_NOT_FOUND;
     }
 
@@ -246,6 +301,8 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
             continue;
         }
 
+        GATEWAY_LOGI("Processing write for resource ID=%u", dataArray[i].id);
+
         switch (dataArray[i].id)
         {
         case RES_M_INSTANCE_ID:
@@ -253,6 +310,7 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
             int64_t value;
             if (1 == lwm2m_data_decode_int(dataArray + i, &value))
             {
+                GATEWAY_LOGI("Decoded instance ID value: %lld", (long long)value);
                 if (value >= 0 && value <= 65535) // 16-bit unsigned int range
                 {
                     uint16_t new_instance_id = (uint16_t)value;
@@ -260,49 +318,38 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
                     // Get callbacks from userData
                     gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
                     
-                    // Store old values for instance recreation
+                    // Store device information for callback
                     uint32_t device_id = targetP->device_id;
-                    connection_type_t conn_type = targetP->connection_type;
-                    uint16_t old_instanceId = targetP->instanceId;
+                    uint16_t old_server_instance_id = targetP->server_instance_id;
+                    
+                    GATEWAY_LOGI("Updating server_instance_id: %u->%u for device %u (internal_id=%u)", 
+                                old_server_instance_id, new_instance_id, device_id, targetP->instanceId);
                     
                     // Update the server-assigned instance ID
                     targetP->server_instance_id = new_instance_id;
                     
                     // Call the device update callback if set
                     if (callbacks != NULL && callbacks->device_update_callback != NULL) {
+                        GATEWAY_LOGI("Calling device update callback");
                         callbacks->device_update_callback(device_id, new_instance_id);
                         GATEWAY_LOGI("Device ring buffer updated for device serial %u", device_id);
-                    }
-                    
-                    // Remove current instance and recreate with new instance_id
-                    // This ensures the LwM2M server sees the instance as "new" with the updated ID
-                    GATEWAY_LOGI("Recreating instance %u->%u for device %u", old_instanceId, new_instance_id, device_id);
-                    
-                    // Remove the current instance from the list
-                    objectP->instanceList = lwm2m_list_remove(objectP->instanceList, old_instanceId, (lwm2m_list_t **)&targetP);
-                    if (targetP != NULL) {
-                        lwm2m_free(targetP);
-                    }
-                    
-                    // Create a new instance with the new instance_id
-                    gateway_add_instance(objectP, new_instance_id, device_id, conn_type);
-                    
-                    // Trigger registration update to notify server of instance changes
-                    if (callbacks != NULL && callbacks->registration_update_callback != NULL) {
-                        callbacks->registration_update_callback();
-                        GATEWAY_LOGI("Registration update triggered for instance recreation");
+                    } else {
+                        GATEWAY_LOGI("No device update callback set");
                     }
                     
                     result = COAP_204_CHANGED;
-                    GATEWAY_LOGI("inst=%u WRITE INSTANCE_ID=%u (instance recreated)", old_instanceId, new_instance_id);
+                    GATEWAY_LOGI("Successfully updated INSTANCE_ID: %u->%u for device %u", 
+                                old_server_instance_id, new_instance_id, device_id);
                 }
                 else
                 {
+                    GATEWAY_LOGI("Invalid instance ID value: %lld (out of range)", (long long)value);
                     result = COAP_400_BAD_REQUEST;
                 }
             }
             else
             {
+                GATEWAY_LOGI("Failed to decode instance ID value");
                 result = COAP_400_BAD_REQUEST;
             }
             break;
@@ -330,8 +377,14 @@ static uint8_t prv_gateway_execute(lwm2m_context_t *contextP,
     /* unused parameter */
     (void)contextP;
 
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
@@ -350,6 +403,7 @@ void display_gateway_object(lwm2m_object_t * object)
 {
     gateway_instance_t * instanceP = (gateway_instance_t *)object->instanceList;
     fprintf(stdout, "  /%u: Gateway object:\r\n", object->objID);
+    GATEWAY_LOGI("Gateway Object Status:");
     while (NULL != instanceP)
     {
         fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, online: %s, last_seen: %lld\r\n",
@@ -359,6 +413,9 @@ void display_gateway_object(lwm2m_object_t * object)
                 instanceP->connection_type,
                 instanceP->online ? "true" : "false",
                 (long long)instanceP->last_seen);
+        GATEWAY_LOGI("  Instance: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, online=%s",
+                    instanceP->instanceId, instanceP->server_instance_id, instanceP->device_id,
+                    instanceP->connection_type, instanceP->online ? "true" : "false");
         instanceP = instanceP->next;
     }
 }
@@ -421,10 +478,13 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
 {
     gateway_instance_t * targetP;
     
+    GATEWAY_LOGI("Adding new instance: internal_id=%u, device_id=%u, conn_type=%d", instanceId, device_id, conn_type);
+    
     // Check if instance already exists
     targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
     if (NULL != targetP)
     {
+        GATEWAY_LOGI("Instance %u already exists", instanceId);
         return COAP_406_NOT_ACCEPTABLE;  // Instance already exists
     }
     
@@ -432,6 +492,7 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     targetP = (gateway_instance_t *)lwm2m_malloc(sizeof(gateway_instance_t));
     if (NULL == targetP)
     {
+        GATEWAY_LOGI("Failed to allocate memory for instance %u", instanceId);
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
     
@@ -448,7 +509,8 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
     
-    GATEWAY_LOGI("Device instance %u added: device_id=%u, conn_type=%d", instanceId, device_id, conn_type);
+    GATEWAY_LOGI("Device instance added successfully: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d", 
+                instanceId, targetP->server_instance_id, device_id, conn_type);
     return COAP_201_CREATED;
 }
 
@@ -475,7 +537,14 @@ uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instance
 {
     gateway_instance_t * targetP;
     
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
@@ -493,10 +562,22 @@ uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanc
 {
     gateway_instance_t * targetP;
     
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    GATEWAY_LOGI("Update instance value: instanceId=%u, resourceId=%u, value=%lld", instanceId, resourceId, (long long)value);
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
     if (NULL == targetP)
     {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+        if (targetP != NULL) {
+            GATEWAY_LOGI("Found instance by internal_id=%u (server_id was %u)", instanceId, targetP->server_instance_id);
+        }
+    }
+    
+    if (NULL == targetP)
+    {
+        GATEWAY_LOGI("Instance not found for update: instanceId=%u", instanceId);
         return COAP_404_NOT_FOUND;
     }
     
@@ -505,9 +586,13 @@ uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanc
     case RES_M_INSTANCE_ID:
         if (value >= 0 && value <= 65535)
         {
+            uint16_t old_server_id = targetP->server_instance_id;
             targetP->server_instance_id = (uint16_t)value;
+            GATEWAY_LOGI("Updated server_instance_id: %u->%u for internal_id=%u, device_id=%u", 
+                        old_server_id, (uint16_t)value, targetP->instanceId, targetP->device_id);
             return COAP_204_CHANGED;
         }
+        GATEWAY_LOGI("Invalid server_instance_id value: %lld", (long long)value);
         return COAP_400_BAD_REQUEST;
         
     case RES_O_DEVICE_ID:
@@ -536,8 +621,14 @@ uint8_t gateway_update_instance_string(lwm2m_object_t * objectP, uint16_t instan
 {
     gateway_instance_t * targetP;
     
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
@@ -560,8 +651,14 @@ uint8_t gateway_update_instance_bool(lwm2m_object_t * objectP, uint16_t instance
 {
     gateway_instance_t * targetP;
     
-    // Find the requested instance
-    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
@@ -581,7 +678,16 @@ uint8_t gateway_update_instance_bool(lwm2m_object_t * objectP, uint16_t instance
 // Getter functions for external access
 int gateway_get_device_id(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *out)
 {
-    gateway_instance_t * targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    gateway_instance_t * targetP;
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (!targetP || !out) return -1;
     *out = targetP->device_id;
     return 0;
@@ -589,7 +695,16 @@ int gateway_get_device_id(lwm2m_object_t * objectP, uint16_t instanceId, uint32_
 
 int gateway_get_connection_type(lwm2m_object_t * objectP, uint16_t instanceId, connection_type_t *out)
 {
-    gateway_instance_t * targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    gateway_instance_t * targetP;
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (!targetP || !out) return -1;
     *out = targetP->connection_type;
     return 0;
@@ -597,7 +712,16 @@ int gateway_get_connection_type(lwm2m_object_t * objectP, uint16_t instanceId, c
 
 int gateway_get_last_seen(lwm2m_object_t * objectP, uint16_t instanceId, time_t *out)
 {
-    gateway_instance_t * targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    gateway_instance_t * targetP;
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (!targetP || !out) return -1;
     *out = targetP->last_seen;
     return 0;
@@ -605,10 +729,48 @@ int gateway_get_last_seen(lwm2m_object_t * objectP, uint16_t instanceId, time_t 
 
 int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, bool *out)
 {
-    gateway_instance_t * targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    gateway_instance_t * targetP;
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
     if (!targetP || !out) return -1;
     *out = targetP->online;
     return 0;
+}
+
+// Find instance by internal instanceId (ring buffer index) - for external access
+gateway_instance_t * gateway_find_by_internal_id(lwm2m_object_t * objectP, uint16_t internal_instance_id)
+{
+    return (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, internal_instance_id);
+}
+
+// Find instance by server_instance_id (device->instance_id) - for external access
+gateway_instance_t * gateway_find_by_server_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
+{
+    return prv_find_by_server_instance_id(objectP, server_instance_id);
+}
+
+// Debug helper to list all instances
+void gateway_debug_list_instances(lwm2m_object_t * objectP)
+{
+    gateway_instance_t * instanceP = (gateway_instance_t *)objectP->instanceList;
+    GATEWAY_LOGI("=== Gateway Object Debug - All Instances ===");
+    int count = 0;
+    while (instanceP != NULL)
+    {
+        GATEWAY_LOGI("Instance[%d]: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d", 
+                    count, instanceP->instanceId, instanceP->server_instance_id, 
+                    instanceP->device_id, instanceP->connection_type);
+        instanceP = instanceP->next;
+        count++;
+    }
+    GATEWAY_LOGI("=== Total instances: %d ===", count);
 }
 
 // Set callback for device instance_id updates
