@@ -38,12 +38,16 @@ typedef enum {
 // Callback function type for updating device instance_id in external storage
 typedef void (*gateway_device_update_callback_t)(uint32_t device_id, uint16_t new_instance_id);
 
+// Callback function type for deleting device from external storage
+typedef void (*gateway_device_delete_callback_t)(uint32_t device_id, uint16_t instance_id);
+
 // Callback function type for triggering LwM2M registration updates
 typedef void (*gateway_registration_update_callback_t)(void);
 
 // Structure to hold callback functions
 typedef struct {
     gateway_device_update_callback_t device_update_callback;
+    gateway_device_delete_callback_t device_delete_callback;
     gateway_registration_update_callback_t registration_update_callback;
 } gateway_callbacks_t;
 
@@ -92,6 +96,9 @@ uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instance
 
 // Set callback for device instance_id updates
 void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback);
+
+// Set callback for device deletion
+void gateway_set_device_delete_callback(lwm2m_object_t * objectP, gateway_device_delete_callback_t callback);
 
 // Set callback for triggering registration updates
 void gateway_set_registration_update_callback(lwm2m_object_t * objectP, gateway_registration_update_callback_t callback);

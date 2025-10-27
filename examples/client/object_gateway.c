@@ -399,6 +399,46 @@ static uint8_t prv_gateway_execute(lwm2m_context_t *contextP,
     }
 }
 
+static uint8_t prv_gateway_delete(lwm2m_context_t *contextP, uint16_t instanceId, lwm2m_object_t *objectP)
+{
+    gateway_instance_t *instanceP;
+    
+    /* unused parameter */
+    (void)contextP;
+    
+    GATEWAY_LOGI("Delete request for gateway instance %u", instanceId);
+    
+    // Find the instance before removing it (so we can get device_id for callback)
+    instanceP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (instanceP == NULL)
+    {
+        GATEWAY_LOGI("Gateway instance %u not found for deletion", instanceId);
+        return COAP_404_NOT_FOUND;
+    }
+    
+    uint32_t device_id = instanceP->device_id;
+    GATEWAY_LOGI("Deleting gateway instance %u (device_id: %u)", instanceId, device_id);
+    
+    // Remove the instance from the list
+    objectP->instanceList = lwm2m_list_remove(objectP->instanceList, instanceId, (lwm2m_list_t **)&instanceP);
+    if (instanceP == NULL)
+    {
+        return COAP_404_NOT_FOUND;
+    }
+    
+    // Call delete callback if available
+    gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+    if (callbacks && callbacks->device_delete_callback)
+    {
+        GATEWAY_LOGI("Calling device delete callback for device_id: %u", device_id);
+        callbacks->device_delete_callback(device_id, instanceId);
+    }
+    
+    lwm2m_free(instanceP);
+    GATEWAY_LOGI("Gateway instance %u deleted successfully", instanceId);
+    return COAP_202_DELETED;
+}
+
 void display_gateway_object(lwm2m_object_t * object)
 {
     gateway_instance_t * instanceP = (gateway_instance_t *)object->instanceList;
@@ -440,6 +480,7 @@ lwm2m_object_t *get_object_gateway(void) {
         gatewayObj->discoverFunc = prv_gateway_discover;
         gatewayObj->writeFunc    = prv_gateway_write;
         gatewayObj->executeFunc  = prv_gateway_execute;
+        gatewayObj->deleteFunc   = prv_gateway_delete;
         
         // Allocate callback structure
         gateway_callbacks_t *callbacks = (gateway_callbacks_t *)lwm2m_malloc(sizeof(gateway_callbacks_t));
@@ -780,6 +821,16 @@ void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device
         gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
         callbacks->device_update_callback = callback;
         GATEWAY_LOGI("Device update callback set for gateway object");
+    }
+}
+
+// Set callback for device deletion
+void gateway_set_device_delete_callback(lwm2m_object_t * objectP, gateway_device_delete_callback_t callback)
+{
+    if (objectP != NULL && objectP->userData != NULL) {
+        gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+        callbacks->device_delete_callback = callback;
+        GATEWAY_LOGI("Device delete callback set for gateway object");
     }
 }
 
