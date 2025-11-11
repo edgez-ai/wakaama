@@ -439,8 +439,10 @@ next_step:
         case STATE_BS_FAILED:
             LOG_ARG("BS failed, timeoutP: %d", (int)*timeoutP);
             if (*timeoutP > 300) {
-                LOG_ARG("timeoutP exceeded 1000 (%d), restarting ESP32!", (int)*timeoutP);
-                esp_restart();
+                LOG_ARG("timeoutP exceeded 300 (%d), retrying bootstrap instead of restarting...", (int)*timeoutP);
+                // esp_restart(); // DISABLED: Restart is too aggressive
+                contextP->state = STATE_BOOTSTRAP_REQUIRED; // Retry bootstrap
+                *timeoutP = 0; // Reset timeout
             }
             return COAP_503_SERVICE_UNAVAILABLE;
 
@@ -469,8 +471,9 @@ next_step:
 
         case STATE_REG_FAILED:
             // TODO avoid infinite loop by checking the bootstrap info is different
-            esp_restart();
-            contextP->state = STATE_BOOTSTRAP_REQUIRED;
+            LOG("Registration failed, retrying instead of restarting...");
+            // esp_restart(); // DISABLED: Restart is too aggressive, just retry registration
+            contextP->state = STATE_REGISTER_REQUIRED; // Retry registration instead of bootstrap
             goto next_step;
 
         case STATE_REG_PENDING:
@@ -485,8 +488,9 @@ next_step:
         if (registration_getStatus(contextP) == STATE_REG_FAILED)
         {
             // TODO avoid infinite loop by checking the bootstrap info is different
-            esp_restart();
-            contextP->state = STATE_BOOTSTRAP_REQUIRED;
+            LOG("Registration failed from READY state, retrying instead of restarting...");
+            // esp_restart(); // DISABLED: Restart is too aggressive, just retry registration
+            contextP->state = STATE_REGISTER_REQUIRED; // Retry registration instead of bootstrap
             goto next_step;
             break;
         }
