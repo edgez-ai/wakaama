@@ -64,6 +64,8 @@ typedef struct _gateway_instance_
     int64_t last_seen;                 // Last seen timestamp (read-only)
     bool online;                       // Online status (read-only)
     uint32_t model;                    // Device model (read-only)
+    char * identity;                   // Device identity for authentication (read-write)
+    char * psk;                        // Pre-Shared Key for device authentication (read-write)
 } gateway_instance_t;
 
 /*

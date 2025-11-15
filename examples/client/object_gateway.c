@@ -25,6 +25,8 @@
  * Last Seen                     |  3 | R     | Single| Yes  | Time    |       | s     |
  * Online                        |  4 | R     | Single| Yes  | Boolean |       |       |
  * Model                         |  5 | R     | Single| Yes  | Integer |       |       |
+ * Identity                      |  6 | RW    | Single| No   | String  |       |       |
+ * PSK                           |  7 | RW    | Single| No   | String  |       |       |
  */
 
 #include "liblwm2m.h"
@@ -56,6 +58,8 @@
 #define RES_O_LAST_SEEN             3
 #define RES_O_ONLINE                4
 #define RES_O_MODEL                 5
+#define RES_O_IDENTITY              6
+#define RES_O_PSK                   7
 
 // Helper function to find instance by server_instance_id
 static gateway_instance_t * prv_find_by_server_instance_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
@@ -125,6 +129,34 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         GATEWAY_LOGI("inst=%u READ MODEL=%u", gwDataP->instanceId, gwDataP->model);
         return COAP_205_CONTENT;
 
+    case RES_O_IDENTITY:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (gwDataP->identity != NULL)
+        {
+            lwm2m_data_encode_string(gwDataP->identity, dataP);
+            GATEWAY_LOGI("inst=%u READ IDENTITY (length=%zu)", gwDataP->instanceId, strlen(gwDataP->identity));
+        }
+        else
+        {
+            lwm2m_data_encode_string("", dataP);
+            GATEWAY_LOGI("inst=%u READ IDENTITY (empty)", gwDataP->instanceId);
+        }
+        return COAP_205_CONTENT;
+
+    case RES_O_PSK:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (gwDataP->psk != NULL)
+        {
+            lwm2m_data_encode_string(gwDataP->psk, dataP);
+            GATEWAY_LOGI("inst=%u READ PSK (length=%zu)", gwDataP->instanceId, strlen(gwDataP->psk));
+        }
+        else
+        {
+            lwm2m_data_encode_string("", dataP);
+            GATEWAY_LOGI("inst=%u READ PSK (empty)", gwDataP->instanceId);
+        }
+        return COAP_205_CONTENT;
+
     default:
         return COAP_404_NOT_FOUND;
     }
@@ -172,7 +204,9 @@ static uint8_t prv_gateway_read(lwm2m_context_t *contextP,
                 RES_O_CONNECTION_TYPE,
                 RES_O_LAST_SEEN,
                 RES_O_ONLINE,
-                RES_O_MODEL
+                RES_O_MODEL,
+                RES_O_IDENTITY,
+                RES_O_PSK
         };
         int nbRes = sizeof(resList)/sizeof(uint16_t);
 
@@ -232,7 +266,9 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
             RES_O_CONNECTION_TYPE,
             RES_O_LAST_SEEN,
             RES_O_ONLINE,
-            RES_O_MODEL
+            RES_O_MODEL,
+            RES_O_IDENTITY,
+            RES_O_PSK
         };
         int nbRes = sizeof(resList) / sizeof(uint16_t);
 
@@ -256,6 +292,8 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
             case RES_O_LAST_SEEN:
             case RES_O_ONLINE:
             case RES_O_MODEL:
+            case RES_O_IDENTITY:
+            case RES_O_PSK:
                 break;
             default:
                 result = COAP_404_NOT_FOUND;
@@ -366,6 +404,74 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
             break;
         }
 
+        case RES_O_IDENTITY:
+        {
+            // Free old identity if exists
+            if (targetP->identity != NULL)
+            {
+                lwm2m_free(targetP->identity);
+                targetP->identity = NULL;
+            }
+            
+            // Allocate and copy new identity
+            if (dataArray[i].value.asBuffer.length > 0)
+            {
+                targetP->identity = (char *)lwm2m_malloc(dataArray[i].value.asBuffer.length + 1);
+                if (targetP->identity != NULL)
+                {
+                    memcpy(targetP->identity, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
+                    targetP->identity[dataArray[i].value.asBuffer.length] = '\0';
+                    GATEWAY_LOGI("Updated IDENTITY for instance %u (length=%zu)", instanceId, dataArray[i].value.asBuffer.length);
+                    result = COAP_204_CHANGED;
+                }
+                else
+                {
+                    GATEWAY_LOGI("Failed to allocate memory for IDENTITY");
+                    result = COAP_500_INTERNAL_SERVER_ERROR;
+                }
+            }
+            else
+            {
+                GATEWAY_LOGI("Cleared IDENTITY for instance %u", instanceId);
+                result = COAP_204_CHANGED;
+            }
+            break;
+        }
+
+        case RES_O_PSK:
+        {
+            // Free old PSK if exists
+            if (targetP->psk != NULL)
+            {
+                lwm2m_free(targetP->psk);
+                targetP->psk = NULL;
+            }
+            
+            // Allocate and copy new PSK
+            if (dataArray[i].value.asBuffer.length > 0)
+            {
+                targetP->psk = (char *)lwm2m_malloc(dataArray[i].value.asBuffer.length + 1);
+                if (targetP->psk != NULL)
+                {
+                    memcpy(targetP->psk, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
+                    targetP->psk[dataArray[i].value.asBuffer.length] = '\0';
+                    GATEWAY_LOGI("Updated PSK for instance %u (length=%zu)", instanceId, dataArray[i].value.asBuffer.length);
+                    result = COAP_204_CHANGED;
+                }
+                else
+                {
+                    GATEWAY_LOGI("Failed to allocate memory for PSK");
+                    result = COAP_500_INTERNAL_SERVER_ERROR;
+                }
+            }
+            else
+            {
+                GATEWAY_LOGI("Cleared PSK for instance %u", instanceId);
+                result = COAP_204_CHANGED;
+            }
+            break;
+        }
+
         default:
             result = COAP_405_METHOD_NOT_ALLOWED;
         }
@@ -445,6 +551,16 @@ static uint8_t prv_gateway_delete(lwm2m_context_t *contextP, uint16_t instanceId
         callbacks->device_delete_callback(device_id, instanceId);
     }
     
+    // Free string resources
+    if (instanceP->identity != NULL)
+    {
+        lwm2m_free(instanceP->identity);
+    }
+    if (instanceP->psk != NULL)
+    {
+        lwm2m_free(instanceP->psk);
+    }
+    
     lwm2m_free(instanceP);
     GATEWAY_LOGI("Gateway instance %u deleted successfully", instanceId);
     return COAP_202_DELETED;
@@ -515,6 +631,17 @@ void free_object_gateway(lwm2m_object_t * objectP)
     {
         instanceP = (gateway_instance_t *)objectP->instanceList;
         objectP->instanceList = objectP->instanceList->next;
+        
+        // Free string resources
+        if (instanceP->identity != NULL)
+        {
+            lwm2m_free(instanceP->identity);
+        }
+        if (instanceP->psk != NULL)
+        {
+            lwm2m_free(instanceP->psk);
+        }
+        
         lwm2m_free(instanceP);
     }
 
@@ -559,6 +686,8 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     targetP->model = model;
     targetP->last_seen = time(NULL);  // Current timestamp
     targetP->online = true;           // Assume online when added
+    targetP->identity = NULL;         // No identity initially
+    targetP->psk = NULL;              // No PSK initially
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
@@ -579,6 +708,16 @@ uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
     if (NULL == targetP)
     {
         return COAP_404_NOT_FOUND;
+    }
+    
+    // Free string resources
+    if (targetP->identity != NULL)
+    {
+        lwm2m_free(targetP->identity);
+    }
+    if (targetP->psk != NULL)
+    {
+        lwm2m_free(targetP->psk);
     }
     
     lwm2m_free(targetP);
