@@ -44,11 +44,15 @@ typedef void (*gateway_device_delete_callback_t)(uint32_t device_id, uint16_t in
 // Callback function type for triggering LwM2M registration updates
 typedef void (*gateway_registration_update_callback_t)(void);
 
+// Callback function type for handling PSK and identity write from server
+typedef void (*gateway_psk_write_callback_t)(uint32_t device_id, uint16_t instance_id, const char *identity, const uint8_t *psk, size_t psk_length);
+
 // Structure to hold callback functions
 typedef struct {
     gateway_device_update_callback_t device_update_callback;
     gateway_device_delete_callback_t device_delete_callback;
     gateway_registration_update_callback_t registration_update_callback;
+    gateway_psk_write_callback_t psk_write_callback;
 } gateway_callbacks_t;
 
 // Gateway Device instance data structure
@@ -106,6 +110,9 @@ void gateway_set_device_delete_callback(lwm2m_object_t * objectP, gateway_device
 
 // Set callback for triggering registration updates
 void gateway_set_registration_update_callback(lwm2m_object_t * objectP, gateway_registration_update_callback_t callback);
+
+// Set callback for PSK write from server
+void gateway_set_psk_write_callback(lwm2m_object_t * objectP, gateway_psk_write_callback_t callback);
 
 // Remove instance and trigger registration update
 uint8_t gateway_remove_and_recreate_instance(lwm2m_object_t * objectP, uint16_t old_instanceId, 

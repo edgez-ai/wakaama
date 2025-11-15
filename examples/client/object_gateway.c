@@ -456,6 +456,22 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
                     memcpy(targetP->psk, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
                     targetP->psk[dataArray[i].value.asBuffer.length] = '\0';
                     GATEWAY_LOGI("Updated PSK for instance %u (length=%zu)", instanceId, dataArray[i].value.asBuffer.length);
+                    
+                    // Get callbacks from userData
+                    gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+                    
+                    // Call the PSK write callback if set
+                    if (callbacks != NULL && callbacks->psk_write_callback != NULL) {
+                        GATEWAY_LOGI("Calling PSK write callback for device_id=%u, instance_id=%u", 
+                                    targetP->device_id, targetP->instanceId);
+                        callbacks->psk_write_callback(targetP->device_id, targetP->instanceId, 
+                                                     targetP->identity,
+                                                     (const uint8_t *)dataArray[i].value.asBuffer.buffer, 
+                                                     dataArray[i].value.asBuffer.length);
+                    } else {
+                        GATEWAY_LOGI("No PSK write callback set");
+                    }
+                    
                     result = COAP_204_CHANGED;
                 }
                 else
@@ -1014,5 +1030,15 @@ void gateway_set_registration_update_callback(lwm2m_object_t * objectP, gateway_
         gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
         callbacks->registration_update_callback = callback;
         GATEWAY_LOGI("Registration update callback set for gateway object");
+    }
+}
+
+// Set callback for PSK write from server
+void gateway_set_psk_write_callback(lwm2m_object_t * objectP, gateway_psk_write_callback_t callback)
+{
+    if (objectP != NULL && objectP->userData != NULL) {
+        gateway_callbacks_t *callbacks = (gateway_callbacks_t *)objectP->userData;
+        callbacks->psk_write_callback = callback;
+        GATEWAY_LOGI("PSK write callback set for gateway object");
     }
 }
