@@ -24,6 +24,7 @@
  * Connection Type               |  2 | R     | Single| Yes  | Integer | 0-3   |       |
  * Last Seen                     |  3 | R     | Single| Yes  | Time    |       | s     |
  * Online                        |  4 | R     | Single| Yes  | Boolean |       |       |
+ * Model                         |  5 | R     | Single| Yes  | Integer |       |       |
  */
 
 #include "liblwm2m.h"
@@ -54,6 +55,7 @@
 #define RES_O_CONNECTION_TYPE       2
 #define RES_O_LAST_SEEN             3
 #define RES_O_ONLINE                4
+#define RES_O_MODEL                 5
 
 // Helper function to find instance by server_instance_id
 static gateway_instance_t * prv_find_by_server_instance_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
@@ -117,6 +119,12 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         GATEWAY_LOGI("inst=%u READ ONLINE=%s", gwDataP->instanceId, gwDataP->online ? "true" : "false");
         return COAP_205_CONTENT;
 
+    case RES_O_MODEL:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_int(gwDataP->model, dataP);
+        GATEWAY_LOGI("inst=%u READ MODEL=%u", gwDataP->instanceId, gwDataP->model);
+        return COAP_205_CONTENT;
+
     default:
         return COAP_404_NOT_FOUND;
     }
@@ -163,7 +171,8 @@ static uint8_t prv_gateway_read(lwm2m_context_t *contextP,
                 RES_M_INSTANCE_ID,
                 RES_O_CONNECTION_TYPE,
                 RES_O_LAST_SEEN,
-                RES_O_ONLINE
+                RES_O_ONLINE,
+                RES_O_MODEL
         };
         int nbRes = sizeof(resList)/sizeof(uint16_t);
 
@@ -222,7 +231,8 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
             RES_M_INSTANCE_ID,
             RES_O_CONNECTION_TYPE,
             RES_O_LAST_SEEN,
-            RES_O_ONLINE
+            RES_O_ONLINE,
+            RES_O_MODEL
         };
         int nbRes = sizeof(resList) / sizeof(uint16_t);
 
@@ -245,6 +255,7 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
             case RES_O_CONNECTION_TYPE:
             case RES_O_LAST_SEEN:
             case RES_O_ONLINE:
+            case RES_O_MODEL:
                 break;
             default:
                 result = COAP_404_NOT_FOUND;
@@ -446,16 +457,17 @@ void display_gateway_object(lwm2m_object_t * object)
     GATEWAY_LOGI("Gateway Object Status:");
     while (NULL != instanceP)
     {
-        fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, online: %s, last_seen: %lld\r\n",
+        fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, model: %lu, online: %s, last_seen: %lld\r\n",
                 instanceP->instanceId,
                 (unsigned long)instanceP->device_id,
                 instanceP->server_instance_id,
                 instanceP->connection_type,
+                (unsigned long)instanceP->model,
                 instanceP->online ? "true" : "false",
                 (long long)instanceP->last_seen);
-        GATEWAY_LOGI("  Instance: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, online=%s",
+        GATEWAY_LOGI("  Instance: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, model=%u, online=%s",
                     instanceP->instanceId, instanceP->server_instance_id, instanceP->device_id,
-                    instanceP->connection_type, instanceP->online ? "true" : "false");
+                    instanceP->connection_type, instanceP->model, instanceP->online ? "true" : "false");
         instanceP = instanceP->next;
     }
 }
@@ -515,7 +527,7 @@ void free_object_gateway(lwm2m_object_t * objectP)
 }
 
 // Add a new device instance with specified instanceId and device information
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type)
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model)
 {
     gateway_instance_t * targetP;
     
@@ -544,14 +556,15 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     targetP->device_id = device_id;
     targetP->server_instance_id = instanceId; // Initialize with same value as instanceId
     targetP->connection_type = conn_type;
+    targetP->model = model;
     targetP->last_seen = time(NULL);  // Current timestamp
     targetP->online = true;           // Assume online when added
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
     
-    GATEWAY_LOGI("Device instance added successfully: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d", 
-                instanceId, targetP->server_instance_id, device_id, conn_type);
+    GATEWAY_LOGI("Device instance added successfully: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, model=%u", 
+                instanceId, targetP->server_instance_id, device_id, conn_type, model);
     return COAP_201_CREATED;
 }
 
@@ -650,6 +663,10 @@ uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanc
         
     case RES_O_LAST_SEEN:
         targetP->last_seen = (time_t)value;
+        return COAP_204_CHANGED;
+        
+    case RES_O_MODEL:
+        targetP->model = (uint32_t)value;
         return COAP_204_CHANGED;
         
     default:
@@ -785,6 +802,23 @@ int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, boo
     return 0;
 }
 
+int gateway_get_model(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *out)
+{
+    gateway_instance_t * targetP;
+    
+    // Try to find by server_instance_id first, then by instanceId
+    targetP = prv_find_by_server_instance_id(objectP, instanceId);
+    if (NULL == targetP)
+    {
+        // Fallback to finding by instanceId (for internal consistency)
+        targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    }
+    
+    if (!targetP || !out) return -1;
+    *out = targetP->model;
+    return 0;
+}
+
 // Find instance by internal instanceId (ring buffer index) - for external access
 gateway_instance_t * gateway_find_by_internal_id(lwm2m_object_t * objectP, uint16_t internal_instance_id)
 {
@@ -805,9 +839,9 @@ void gateway_debug_list_instances(lwm2m_object_t * objectP)
     int count = 0;
     while (instanceP != NULL)
     {
-        GATEWAY_LOGI("Instance[%d]: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d", 
+        GATEWAY_LOGI("Instance[%d]: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, model=%u", 
                     count, instanceP->instanceId, instanceP->server_instance_id, 
-                    instanceP->device_id, instanceP->connection_type);
+                    instanceP->device_id, instanceP->connection_type, instanceP->model);
         instanceP = instanceP->next;
         count++;
     }

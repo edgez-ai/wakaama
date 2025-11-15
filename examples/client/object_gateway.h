@@ -63,6 +63,7 @@ typedef struct _gateway_instance_
     connection_type_t connection_type; // Connection type enum (read-only)
     int64_t last_seen;                 // Last seen timestamp (read-only)
     bool online;                       // Online status (read-only)
+    uint32_t model;                    // Device model (read-only)
 } gateway_instance_t;
 
 /*
@@ -73,7 +74,7 @@ void free_object_gateway(lwm2m_object_t * objectP);
 void display_gateway_object(lwm2m_object_t * objectP);
 
 // Instance management functions
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type);
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model);
 uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 
 // Find instance by internal instanceId (ring buffer index)
@@ -90,6 +91,7 @@ int gateway_get_device_id(lwm2m_object_t * objectP, uint16_t instanceId, uint32_
 int gateway_get_connection_type(lwm2m_object_t * objectP, uint16_t instanceId, connection_type_t *out);
 int gateway_get_last_seen(lwm2m_object_t * objectP, uint16_t instanceId, time_t *out);
 int gateway_get_online_status(lwm2m_object_t * objectP, uint16_t instanceId, bool *out);
+int gateway_get_model(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *out);
 
 // Device status update helpers
 uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instanceId, bool online);
