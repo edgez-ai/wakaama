@@ -24,6 +24,11 @@
 #include "esp_log.h"
 #include "internals.h"
 
+/* Include transport wrapper if available */
+#ifdef USE_LWM2M_TRANSPORT_WRAPPER
+#include "lwm2m_transport_wrapper.h"
+#endif
+
 #define COAP_PORT "5683"
 #define COAPS_PORT "5684"
 #define URI_LENGTH 256
@@ -190,6 +195,17 @@ int send_data(dtls_connection_t *connP,
 #endif
 
     offset = 0;
+    
+#ifdef USE_LWM2M_TRANSPORT_WRAPPER
+    /* Use transport wrapper if available */
+    int result = lwm2m_transport_wrapper_send_data(connP, buffer, length);
+    if (result < 0) {
+        LOG("send_data: transport wrapper send failed");
+        return -1;
+    }
+    return result;
+#else
+    /* Original socket-based implementation */
     int sock = connP->sock;
     if (sock < 0) {
         LOG("Invalid socket in connection");
@@ -207,6 +223,7 @@ int send_data(dtls_connection_t *connP,
     }
     connP->lastSend = lwm2m_gettime();
     return offset;
+#endif
 }
 
 /**************************  TinyDTLS Callbacks  ************************/
