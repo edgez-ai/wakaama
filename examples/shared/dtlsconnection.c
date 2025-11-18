@@ -513,11 +513,15 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
     char * host;
     char * port;
 
+    fprintf(stdout, "🔷 connection_create: sock=%d, instanceId=%d, addressFamily=%d\n", 
+            sock, instanceId, addressFamily);
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = addressFamily;
     hints.ai_socktype = SOCK_DGRAM;
 
     uri = security_get_uri(lwm2mH, securityObj, instanceId, uriBuf, URI_LENGTH);
+    fprintf(stdout, "🔷 connection_create: URI=%s\n", uri ? uri : "NULL");
     if (uri == NULL) return NULL;
 
     // parse uri in the form "coaps://[host]:[port]"
@@ -561,29 +565,43 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
         port++;
     }
 
-    if (0 != getaddrinfo(host, port, &hints, &servinfo) || servinfo == NULL) return NULL;
+    fprintf(stdout, "🔷 connection_create: Resolving host=%s port=%s\n", host, port);
+    if (0 != getaddrinfo(host, port, &hints, &servinfo) || servinfo == NULL) {
+        fprintf(stderr, "🔷 connection_create: getaddrinfo failed for %s:%s\n", host, port);
+        return NULL;
+    }
 
+    fprintf(stdout, "🔷 connection_create: DNS resolved, testing addresses...\n");
     // we test the various addresses
     s = -1;
     for(p = servinfo ; p != NULL && s == -1 ; p = p->ai_next)
     {
+        fprintf(stdout, "🔷 connection_create: Trying address family=%d\n", p->ai_family);
         s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (s >= 0)
         {
+            fprintf(stdout, "🔷 connection_create: Socket created: %d, attempting connect...\n", s);
             sa = p->ai_addr;
             sl = p->ai_addrlen;
             if (-1 == connect(s, p->ai_addr, p->ai_addrlen))
             {
+                fprintf(stderr, "🔷 connection_create: Connect failed for socket %d\n", s);
                 close(s);
                 s = -1;
+            } else {
+                fprintf(stdout, "🔷 connection_create: Connect successful!\n");
             }
+        } else {
+            fprintf(stderr, "🔷 connection_create: Socket creation failed\n");
         }
     }
     if (s >= 0)
     {
+        fprintf(stdout, "🔷 connection_create: Creating new incoming connection...\n");
         connP = connection_new_incoming(connList, sock, sa, sl);
         close(s);
 
+        fprintf(stdout, "🔷 connection_create: connP=%p\n", connP);
         // do we need to start tinydtls?
         if (connP != NULL)
         {
@@ -591,9 +609,11 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
             connP->securityInstId = instanceId;
             connP->lwm2mH = lwm2mH;
 
+            fprintf(stdout, "🔷 connection_create: Checking security mode...\n");
             if (security_get_mode(lwm2mH, connP->securityObj,connP->securityInstId)
                      != LWM2M_SECURITY_MODE_NONE)
             {
+                fprintf(stdout, "🔷 connection_create: Getting DTLS context...\n");
                 connP->dtlsContext = get_dtls_context(lwm2mH, connP);
             }
             else
