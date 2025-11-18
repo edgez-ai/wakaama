@@ -23,7 +23,7 @@ idf_component_register(
 
     INCLUDE_DIRS
         "include" "examples/shared" "examples/shared/tinydtls"
-    REQUIRES "esp_hw_support"
+    REQUIRES "esp_hw_support" "main"
     )
 
 target_compile_definitions(${COMPONENT_TARGET}
@@ -46,6 +46,7 @@ target_compile_definitions(${COMPONENT_TARGET}
                     "WITH_LWIP"
                     "WITH_SHA256"
                     "WITH_ECC"
+                    "USE_LWM2M_TRANSPORT_WRAPPER"
                     )
 
 set(USES_TERMINAL_DOWNLOAD TRUE)

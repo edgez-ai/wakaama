@@ -167,6 +167,7 @@ int send_data(dtls_connection_t *connP,
                     uint8_t * buffer,
                     size_t length)
 {
+    fprintf(stdout, "🔷🔷 send_data ENTRY: connP=%p, sock=%d, length=%zu\n", connP, connP ? connP->sock : -999, length);
     int nbSent;
     size_t offset;
 
@@ -198,7 +199,9 @@ int send_data(dtls_connection_t *connP,
     
 #ifdef USE_LWM2M_TRANSPORT_WRAPPER
     /* Use transport wrapper if available */
+    fprintf(stdout, "🔷🔷 send_data: USE_LWM2M_TRANSPORT_WRAPPER is DEFINED, calling wrapper with %d bytes\n", (int)length);
     int result = lwm2m_transport_wrapper_send_data(connP, buffer, length);
+    fprintf(stdout, "🔷🔷 send_data: Transport wrapper returned %d\n", result);
     if (result < 0) {
         LOG("send_data: transport wrapper send failed");
         return -1;
@@ -206,7 +209,9 @@ int send_data(dtls_connection_t *connP,
     return result;
 #else
     /* Original socket-based implementation */
+    fprintf(stdout, "🔷🔷 send_data: USE_LWM2M_TRANSPORT_WRAPPER is NOT DEFINED, using socket path\n");
     int sock = connP->sock;
+    fprintf(stdout, "🔷🔷 send_data: socket path - sock=%d\n", sock);
     if (sock < 0) {
         LOG("Invalid socket in connection");
         return -1;
@@ -299,20 +304,26 @@ static int send_to_peer(struct dtls_context_t *ctx,
 
     dtls_app_context_t *appContext = (dtls_app_context_t *)ctx->app;
 
+    fprintf(stdout, "🔷 send_to_peer: Called with %d bytes\n", (int)len);
+
     // find connection
     dtls_connection_t* cnx = connection_find(appContext->connList, &(session->addr.st),session->size);
     if (cnx != NULL)
     {
+        fprintf(stdout, "🔷 send_to_peer: Connection found, calling send_data\n");
         // send data to peer
 
         // TODO: nat expiration?
         int res = send_data(cnx,data,len);
+        fprintf(stdout, "🔷 send_to_peer: send_data returned %d\n", res);
         if (res < 0)
         {
+            fprintf(stderr, "🔷 send_to_peer: ❌ send_data failed with %d\n", res);
             return -1;
         }
         return res;
     }
+    fprintf(stderr, "🔷 send_to_peer: ❌ Connection not found\n");
     return -1;
 }
 
