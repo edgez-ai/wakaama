@@ -572,34 +572,53 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
     }
 
     fprintf(stdout, "🔷 connection_create: DNS resolved, testing addresses...\n");
-    // we test the various addresses
-    s = -1;
-    for(p = servinfo ; p != NULL && s == -1 ; p = p->ai_next)
-    {
-        fprintf(stdout, "🔷 connection_create: Trying address family=%d\n", p->ai_family);
-        s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (s >= 0)
-        {
-            fprintf(stdout, "🔷 connection_create: Socket created: %d, attempting connect...\n", s);
-            sa = p->ai_addr;
-            sl = p->ai_addrlen;
-            if (-1 == connect(s, p->ai_addr, p->ai_addrlen))
-            {
-                fprintf(stderr, "🔷 connection_create: Connect failed for socket %d\n", s);
-                close(s);
-                s = -1;
-            } else {
-                fprintf(stdout, "🔷 connection_create: Connect successful!\n");
-            }
+    // Check if we're using a non-UDP transport (LoRa=1, HaLow=2)
+    // For these transports, skip socket creation and use the first address
+    if (sock <= 2) {
+        fprintf(stdout, "🔷 connection_create: Using non-UDP transport (sock=%d), skipping socket test\n", sock);
+        s = sock;  // Dummy value to indicate success
+        if (servinfo != NULL) {
+            sa = servinfo->ai_addr;
+            sl = servinfo->ai_addrlen;
+            fprintf(stdout, "🔷 connection_create: Using first resolved address for connection\n");
         } else {
-            fprintf(stderr, "🔷 connection_create: Socket creation failed\n");
+            fprintf(stderr, "🔷 connection_create: No address info available\n");
+            s = -1;
+        }
+    } else {
+        // UDP transport: test the various addresses with real socket
+        s = -1;
+        for(p = servinfo ; p != NULL && s == -1 ; p = p->ai_next)
+        {
+            fprintf(stdout, "🔷 connection_create: Trying address family=%d\n", p->ai_family);
+            s = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (s >= 0)
+            {
+                fprintf(stdout, "🔷 connection_create: Socket created: %d, attempting connect...\n", s);
+                sa = p->ai_addr;
+                sl = p->ai_addrlen;
+                if (-1 == connect(s, p->ai_addr, p->ai_addrlen))
+                {
+                    fprintf(stderr, "🔷 connection_create: Connect failed for socket %d\n", s);
+                    close(s);
+                    s = -1;
+                } else {
+                    fprintf(stdout, "🔷 connection_create: Connect successful!\n");
+                }
+            } else {
+                fprintf(stderr, "🔷 connection_create: Socket creation failed\n");
+            }
         }
     }
+    
     if (s >= 0)
     {
         fprintf(stdout, "🔷 connection_create: Creating new incoming connection...\n");
         connP = connection_new_incoming(connList, sock, sa, sl);
-        close(s);
+        if (sock > 2) {
+            // Only close the test socket for UDP transport
+            close(s);
+        }
 
         fprintf(stdout, "🔷 connection_create: connP=%p\n", connP);
         // do we need to start tinydtls?
