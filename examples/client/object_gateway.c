@@ -27,6 +27,7 @@
  * Model                         |  5 | R     | Single| Yes  | Integer |       |       |
  * Identity                      |  6 | RW    | Single| No   | String  |       |       |
  * PSK                           |  7 | RW    | Single| No   | String  |       |       |
+ * Server                        |  8 | RW    | Single| No   | String  |       |       |
  */
 
 #include "liblwm2m.h"
@@ -60,6 +61,7 @@
 #define RES_O_MODEL                 5
 #define RES_O_IDENTITY              6
 #define RES_O_PSK                   7
+#define RES_O_SERVER                8
 
 // Helper function to find instance by server_instance_id
 static gateway_instance_t * prv_find_by_server_instance_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
@@ -157,6 +159,20 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         }
         return COAP_205_CONTENT;
 
+    case RES_O_SERVER:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (gwDataP->server != NULL)
+        {
+            lwm2m_data_encode_string(gwDataP->server, dataP);
+            GATEWAY_LOGI("inst=%u READ SERVER (length=%zu)", gwDataP->instanceId, strlen(gwDataP->server));
+        }
+        else
+        {
+            lwm2m_data_encode_string("", dataP);
+            GATEWAY_LOGI("inst=%u READ SERVER (empty)", gwDataP->instanceId);
+        }
+        return COAP_205_CONTENT;
+
     default:
         return COAP_404_NOT_FOUND;
     }
@@ -206,7 +222,8 @@ static uint8_t prv_gateway_read(lwm2m_context_t *contextP,
                 RES_O_ONLINE,
                 RES_O_MODEL,
                 RES_O_IDENTITY,
-                RES_O_PSK
+                RES_O_PSK,
+                RES_O_SERVER
         };
         int nbRes = sizeof(resList)/sizeof(uint16_t);
 
@@ -294,6 +311,7 @@ static uint8_t prv_gateway_discover(lwm2m_context_t *contextP,
             case RES_O_MODEL:
             case RES_O_IDENTITY:
             case RES_O_PSK:
+            case RES_O_SERVER:
                 break;
             default:
                 result = COAP_404_NOT_FOUND;
@@ -467,7 +485,8 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
                         callbacks->psk_write_callback(targetP->device_id, targetP->instanceId, 
                                                      targetP->identity,
                                                      (const uint8_t *)dataArray[i].value.asBuffer.buffer, 
-                                                     dataArray[i].value.asBuffer.length);
+                                                     dataArray[i].value.asBuffer.length,
+                                                     targetP->server);
                     } else {
                         GATEWAY_LOGI("No PSK write callback set");
                     }
@@ -483,6 +502,40 @@ static uint8_t prv_gateway_write(lwm2m_context_t *contextP,
             else
             {
                 GATEWAY_LOGI("Cleared PSK for instance %u", instanceId);
+                result = COAP_204_CHANGED;
+            }
+            break;
+        }
+
+        case RES_O_SERVER:
+        {
+            // Free old server if exists
+            if (targetP->server != NULL)
+            {
+                lwm2m_free(targetP->server);
+                targetP->server = NULL;
+            }
+            
+            // Allocate and copy new server
+            if (dataArray[i].value.asBuffer.length > 0)
+            {
+                targetP->server = (char *)lwm2m_malloc(dataArray[i].value.asBuffer.length + 1);
+                if (targetP->server != NULL)
+                {
+                    memcpy(targetP->server, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
+                    targetP->server[dataArray[i].value.asBuffer.length] = '\0';
+                    GATEWAY_LOGI("Updated SERVER for instance %u (length=%zu)", instanceId, dataArray[i].value.asBuffer.length);
+                    result = COAP_204_CHANGED;
+                }
+                else
+                {
+                    GATEWAY_LOGI("Failed to allocate memory for SERVER");
+                    result = COAP_500_INTERNAL_SERVER_ERROR;
+                }
+            }
+            else
+            {
+                GATEWAY_LOGI("Cleared SERVER for instance %u", instanceId);
                 result = COAP_204_CHANGED;
             }
             break;
@@ -704,6 +757,7 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     targetP->online = true;           // Assume online when added
     targetP->identity = NULL;         // No identity initially
     targetP->psk = NULL;              // No PSK initially
+    targetP->server = NULL;           // No server initially
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
@@ -734,6 +788,10 @@ uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
     if (targetP->psk != NULL)
     {
         lwm2m_free(targetP->psk);
+    }
+    if (targetP->server != NULL)
+    {
+        lwm2m_free(targetP->server);
     }
     
     lwm2m_free(targetP);

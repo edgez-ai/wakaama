@@ -45,7 +45,7 @@ typedef void (*gateway_device_delete_callback_t)(uint32_t device_id, uint16_t in
 typedef void (*gateway_registration_update_callback_t)(void);
 
 // Callback function type for handling PSK and identity write from server
-typedef void (*gateway_psk_write_callback_t)(uint32_t device_id, uint16_t instance_id, const char *identity, const uint8_t *psk, size_t psk_length);
+typedef void (*gateway_psk_write_callback_t)(uint32_t device_id, uint16_t instance_id, const char *identity, const uint8_t *psk, size_t psk_length, const char *server);
 
 // Structure to hold callback functions
 typedef struct {
@@ -70,6 +70,7 @@ typedef struct _gateway_instance_
     uint32_t model;                    // Device model (read-only)
     char * identity;                   // Device identity for authentication (read-write)
     char * psk;                        // Pre-Shared Key for device authentication (read-write)
+    char * server;                     // Server information (read-write)
 } gateway_instance_t;
 
 /*
