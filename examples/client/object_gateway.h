@@ -32,7 +32,8 @@ typedef enum {
     CONNECTION_WIFI = 0,
     CONNECTION_BLE = 1,
     CONNECTION_LORA = 2,
-    CONNECTION_RS485 = 3
+    CONNECTION_RS485 = 3,
+    CONNECTION_HALOW = 4
 } connection_type_t;
 
 // Callback function type for updating device instance_id in external storage
