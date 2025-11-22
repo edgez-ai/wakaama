@@ -72,6 +72,7 @@ typedef struct _gateway_instance_
     char * identity;                   // Device identity for authentication (read-write)
     char * psk;                        // Pre-Shared Key for device authentication (read-write)
     char * server;                     // Server information (read-write)
+    char * mac_address;                // Device MAC address (read-only)
 } gateway_instance_t;
 
 /*
@@ -82,7 +83,7 @@ void free_object_gateway(lwm2m_object_t * objectP);
 void display_gateway_object(lwm2m_object_t * objectP);
 
 // Instance management functions
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model);
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model, const char *mac_address);
 uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 
 // Find instance by internal instanceId (ring buffer index)
@@ -103,6 +104,9 @@ int gateway_get_model(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *o
 
 // Device status update helpers
 uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instanceId, bool online);
+
+// Set MAC address for a device
+uint8_t gateway_set_mac_address(lwm2m_object_t * objectP, uint16_t instanceId, const char *mac_address);
 
 // Set callback for device instance_id updates
 void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback);

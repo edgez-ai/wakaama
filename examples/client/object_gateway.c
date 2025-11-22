@@ -28,6 +28,7 @@
  * Identity                      |  6 | RW    | Single| No   | String  |       |       |
  * PSK                           |  7 | RW    | Single| No   | String  |       |       |
  * Server                        |  8 | RW    | Single| No   | String  |       |       |
+ * MAC Address                   |  9 | R     | Single| No   | String  |       |       |
  */
 
 #include "liblwm2m.h"
@@ -62,6 +63,7 @@
 #define RES_O_IDENTITY              6
 #define RES_O_PSK                   7
 #define RES_O_SERVER                8
+#define RES_O_MAC_ADDRESS           9
 
 // Helper function to find instance by server_instance_id
 static gateway_instance_t * prv_find_by_server_instance_id(lwm2m_object_t * objectP, uint16_t server_instance_id)
@@ -170,6 +172,20 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         {
             lwm2m_data_encode_string("", dataP);
             GATEWAY_LOGI("inst=%u READ SERVER (empty)", gwDataP->instanceId);
+        }
+        return COAP_205_CONTENT;
+
+    case RES_O_MAC_ADDRESS:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (gwDataP->mac_address != NULL)
+        {
+            lwm2m_data_encode_string(gwDataP->mac_address, dataP);
+            GATEWAY_LOGI("inst=%u READ MAC_ADDRESS: %s", gwDataP->instanceId, gwDataP->mac_address);
+        }
+        else
+        {
+            lwm2m_data_encode_string("", dataP);
+            GATEWAY_LOGI("inst=%u READ MAC_ADDRESS (empty)", gwDataP->instanceId);
         }
         return COAP_205_CONTENT;
 
@@ -642,17 +658,19 @@ void display_gateway_object(lwm2m_object_t * object)
     GATEWAY_LOGI("Gateway Object Status:");
     while (NULL != instanceP)
     {
-        fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, model: %lu, online: %s, last_seen: %lld\r\n",
+        fprintf(stdout, "    Instance %u: device_id: %lu, server_instance_id: %u, conn_type: %d, model: %lu, online: %s, last_seen: %lld, mac: %s\r\n",
                 instanceP->instanceId,
                 (unsigned long)instanceP->device_id,
                 instanceP->server_instance_id,
                 instanceP->connection_type,
                 (unsigned long)instanceP->model,
                 instanceP->online ? "true" : "false",
-                (long long)instanceP->last_seen);
-        GATEWAY_LOGI("  Instance: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, model=%u, online=%s",
+                (long long)instanceP->last_seen,
+                instanceP->mac_address ? instanceP->mac_address : "N/A");
+        GATEWAY_LOGI("  Instance: internal_id=%u, server_id=%u, device_id=%u, conn_type=%d, model=%u, online=%s, mac=%s",
                     instanceP->instanceId, instanceP->server_instance_id, instanceP->device_id,
-                    instanceP->connection_type, instanceP->model, instanceP->online ? "true" : "false");
+                    instanceP->connection_type, instanceP->model, instanceP->online ? "true" : "false",
+                    instanceP->mac_address ? instanceP->mac_address : "N/A");
         instanceP = instanceP->next;
     }
 }
@@ -723,7 +741,7 @@ void free_object_gateway(lwm2m_object_t * objectP)
 }
 
 // Add a new device instance with specified instanceId and device information
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model)
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model, const char *mac_address)
 {
     gateway_instance_t * targetP;
     
@@ -758,6 +776,18 @@ uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint
     targetP->identity = NULL;         // No identity initially
     targetP->psk = NULL;              // No PSK initially
     targetP->server = NULL;           // No server initially
+    targetP->mac_address = NULL;      // No MAC address initially
+    
+    // Set MAC address if provided
+    if (mac_address != NULL && strlen(mac_address) > 0)
+    {
+        targetP->mac_address = (char *)lwm2m_malloc(strlen(mac_address) + 1);
+        if (targetP->mac_address != NULL)
+        {
+            strcpy(targetP->mac_address, mac_address);
+            GATEWAY_LOGI("MAC address set: %s", mac_address);
+        }
+    }
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
@@ -793,6 +823,10 @@ uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId)
     {
         lwm2m_free(targetP->server);
     }
+    if (targetP->mac_address != NULL)
+    {
+        lwm2m_free(targetP->mac_address);
+    }
     
     lwm2m_free(targetP);
     GATEWAY_LOGI("Gateway instance %u removed", instanceId);
@@ -821,6 +855,46 @@ uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instance
     targetP->last_seen = time(NULL);  // Update timestamp
     
     GATEWAY_LOGI("Device instance %u status updated: online=%s", instanceId, online ? "true" : "false");
+    return COAP_204_CHANGED;
+}
+
+// Set MAC address for a device instance
+uint8_t gateway_set_mac_address(lwm2m_object_t * objectP, uint16_t instanceId, const char *mac_address)
+{
+    gateway_instance_t * targetP;
+    
+    if (mac_address == NULL || strlen(mac_address) == 0)
+    {
+        GATEWAY_LOGI("Invalid MAC address provided");
+        return COAP_400_BAD_REQUEST;
+    }
+    
+    // Find instance by instanceId
+    targetP = (gateway_instance_t *)lwm2m_list_find(objectP->instanceList, instanceId);
+    if (NULL == targetP)
+    {
+        GATEWAY_LOGI("Instance %u not found", instanceId);
+        return COAP_404_NOT_FOUND;
+    }
+    
+    // Free old MAC address if exists
+    if (targetP->mac_address != NULL)
+    {
+        lwm2m_free(targetP->mac_address);
+        targetP->mac_address = NULL;
+    }
+    
+    // Allocate and copy new MAC address
+    targetP->mac_address = (char *)lwm2m_malloc(strlen(mac_address) + 1);
+    if (targetP->mac_address == NULL)
+    {
+        GATEWAY_LOGI("Failed to allocate memory for MAC address");
+        return COAP_500_INTERNAL_SERVER_ERROR;
+    }
+    
+    strcpy(targetP->mac_address, mac_address);
+    GATEWAY_LOGI("MAC address set for instance %u: %s", instanceId, mac_address);
+    
     return COAP_204_CHANGED;
 }
 
