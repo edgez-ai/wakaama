@@ -14,43 +14,49 @@
 #define RID_VENDOR_ID 0
 #define RID_MAC_OUI 1
 
-// Support up to 10 vendor data items
-#define MAX_VENDOR_DATA 10
-static vendor_data_t g_vendor_data[MAX_VENDOR_DATA];
-static int g_vendor_data_count = 0;
-
 static const char *TAG = "object_vendor";
+
+// Helper function to find instance
+static vendor_instance_t * prv_find_instance(lwm2m_object_t * objectP, uint16_t instanceId)
+{
+    vendor_instance_t * instanceP = (vendor_instance_t *)objectP->instanceList;
+    
+    while (instanceP != NULL)
+    {
+        if (instanceP->instanceId == instanceId)
+        {
+            return instanceP;
+        }
+        instanceP = instanceP->next;
+    }
+    
+    return NULL;
+}
 
 // Correct callback signatures for wakaama
 static uint8_t prv_read(lwm2m_context_t *contextP, uint16_t instanceId, int *numDataP, lwm2m_data_t **dataArrayP, lwm2m_object_t *objectP) {
     ESP_LOGI(TAG, "[prv_read] ENTER: instanceId=%d, numData=%d", instanceId, *numDataP);
     
-    // Find the vendor data for this instance
-    int data_index = -1;
-    for (int i = 0; i < g_vendor_data_count; i++) {
-        if (g_vendor_data[i].instance_id == instanceId) {
-            data_index = i;
-            break;
-        }
-    }
+    // Find the vendor instance
+    vendor_instance_t * instanceP = prv_find_instance(objectP, instanceId);
     
-    if (data_index == -1) {
-        ESP_LOGE(TAG, "[prv_read] Instance %d not found (total instances: %d)", instanceId, g_vendor_data_count);
+    if (instanceP == NULL) {
+        ESP_LOGE(TAG, "[prv_read] Instance %d not found", instanceId);
         return COAP_404_NOT_FOUND;
     }
     
-    ESP_LOGI(TAG, "[prv_read] Found instance %d at index %d", instanceId, data_index);
+    ESP_LOGI(TAG, "[prv_read] Found instance %d", instanceId);
     
     for (int i = 0; i < *numDataP; i++) {
         ESP_LOGI(TAG, "[prv_read] Processing resource[%d]: id=%d", i, (*dataArrayP)[i].id);
         switch ((*dataArrayP)[i].id) {
             case RID_VENDOR_ID:
-                lwm2m_data_encode_int(g_vendor_data[data_index].vendor_id, &(*dataArrayP)[i]);
-                ESP_LOGI(TAG, "[prv_read] Read vendor_id: %lld", g_vendor_data[data_index].vendor_id);
+                lwm2m_data_encode_int(instanceP->vendor_id, &(*dataArrayP)[i]);
+                ESP_LOGI(TAG, "[prv_read] Read vendor_id: %lld", instanceP->vendor_id);
                 break;
             case RID_MAC_OUI:
-                lwm2m_data_encode_int(g_vendor_data[data_index].mac_oui, &(*dataArrayP)[i]);
-                ESP_LOGI(TAG, "[prv_read] Read mac_oui: %u", g_vendor_data[data_index].mac_oui);
+                lwm2m_data_encode_int(instanceP->mac_oui, &(*dataArrayP)[i]);
+                ESP_LOGI(TAG, "[prv_read] Read mac_oui: %u", instanceP->mac_oui);
                 break;
             default:
                 ESP_LOGE(TAG, "[prv_read] Unknown resource ID: %d", (*dataArrayP)[i].id);
@@ -81,8 +87,7 @@ static uint8_t prv_execute(lwm2m_context_t *contextP, uint16_t instanceId, uint1
     return COAP_404_NOT_FOUND;
 }
 static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP) {
-    ESP_LOGI(TAG, "[prv_create] ENTER: instanceId=%d, numData=%d, current_count=%d/%d", 
-             instanceId, numData, g_vendor_data_count, MAX_VENDOR_DATA);
+    ESP_LOGI(TAG, "[prv_create] ENTER: instanceId=%d, numData=%d", instanceId, numData);
     
     // Log all incoming data
     for (int i = 0; i < numData; i++) {
@@ -90,23 +95,21 @@ static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int nu
     }
     
     // Check if instance already exists
-    for (int i = 0; i < g_vendor_data_count; i++) {
-        if (g_vendor_data[i].instance_id == instanceId) {
-            ESP_LOGW(TAG, "[prv_create] Instance %d already exists at index %d - returning COAP_400", instanceId, i);
-            return COAP_400_BAD_REQUEST;
-        }
+    vendor_instance_t * instanceP = prv_find_instance(objectP, instanceId);
+    if (instanceP != NULL) {
+        ESP_LOGW(TAG, "[prv_create] Instance %d already exists - returning COAP_400", instanceId);
+        return COAP_400_BAD_REQUEST;
     }
     
-    if (g_vendor_data_count >= MAX_VENDOR_DATA) {
-        ESP_LOGE(TAG, "[prv_create] EXIT: Max vendor data reached (COAP_500)");
+    // Allocate new instance
+    instanceP = (vendor_instance_t *)lwm2m_malloc(sizeof(vendor_instance_t));
+    if (instanceP == NULL) {
+        ESP_LOGE(TAG, "[prv_create] EXIT: Failed to allocate memory (COAP_500)");
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
     
-    // Initialize the new vendor data entry
-    int data_index = g_vendor_data_count;
-    g_vendor_data[data_index].instance_id = instanceId;
-    g_vendor_data[data_index].vendor_id = 0;
-    g_vendor_data[data_index].mac_oui = 0;
+    memset(instanceP, 0, sizeof(vendor_instance_t));
+    instanceP->instanceId = instanceId;
     
     // Parse the creation data
     for (int i = 0; i < numData; i++) {
@@ -114,10 +117,11 @@ static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int nu
             case RID_VENDOR_ID: {
                 int64_t value;
                 if (lwm2m_data_decode_int(&dataArray[i], &value) == 1) {
-                    g_vendor_data[data_index].vendor_id = value;
-                    ESP_LOGI(TAG, "[prv_create] Set vendor_id[%d]: %lld", data_index, value);
+                    instanceP->vendor_id = value;
+                    ESP_LOGI(TAG, "[prv_create] Set vendor_id: %lld", value);
                 } else {
                     ESP_LOGE(TAG, "[prv_create] Failed to decode vendor_id (type=%d)", dataArray[i].type);
+                    lwm2m_free(instanceP);
                     return COAP_400_BAD_REQUEST;
                 }
                 break;
@@ -127,34 +131,37 @@ static uint8_t prv_create(lwm2m_context_t *contextP, uint16_t instanceId, int nu
                 if (lwm2m_data_decode_int(&dataArray[i], &value) == 1) {
                     if (value < 0 || value > 16777215) {
                         ESP_LOGE(TAG, "[prv_create] MAC OUI out of range: %lld (must be 0-16777215)", value);
+                        lwm2m_free(instanceP);
                         return COAP_400_BAD_REQUEST;
                     }
-                    g_vendor_data[data_index].mac_oui = (uint32_t)value;
-                    ESP_LOGI(TAG, "[prv_create] Set mac_oui[%d]: %u (0x%06X)", data_index, g_vendor_data[data_index].mac_oui, g_vendor_data[data_index].mac_oui);
+                    instanceP->mac_oui = (uint32_t)value;
+                    ESP_LOGI(TAG, "[prv_create] Set mac_oui: %u (0x%06X)", instanceP->mac_oui, instanceP->mac_oui);
                 } else {
                     ESP_LOGE(TAG, "[prv_create] Failed to decode mac_oui (type=%d)", dataArray[i].type);
+                    lwm2m_free(instanceP);
                     return COAP_400_BAD_REQUEST;
                 }
                 break;
             }
             default:
                 ESP_LOGE(TAG, "[prv_create] Unknown resource ID: %d", dataArray[i].id);
+                lwm2m_free(instanceP);
                 return COAP_404_NOT_FOUND;
         }
     }
     
-    g_vendor_data_count++;
-    ESP_LOGI(TAG, "[prv_create] EXIT: SUCCESS - Created instance %d (new count: %d, vendor_id=%lld, mac_oui=0x%06X)", 
-             instanceId, g_vendor_data_count, 
-             g_vendor_data[data_index].vendor_id, 
-             g_vendor_data[data_index].mac_oui);
+    // Add instance to the object's instance list
+    objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, instanceP);
+    
+    ESP_LOGI(TAG, "[prv_create] EXIT: SUCCESS - Created instance %d (vendor_id=%lld, mac_oui=0x%06X)", 
+             instanceId, instanceP->vendor_id, instanceP->mac_oui);
     return COAP_201_CREATED;
 }
 
 lwm2m_object_t *get_vendor_object(void) {
     ESP_LOGI(TAG, "[get_vendor_object] ENTER: Creating vendor object %d", VENDOR_OBJECT_ID);
     
-    lwm2m_object_t *obj = (lwm2m_object_t *)malloc(sizeof(lwm2m_object_t));
+    lwm2m_object_t *obj = (lwm2m_object_t *)lwm2m_malloc(sizeof(lwm2m_object_t));
     if (obj == NULL) {
         ESP_LOGE(TAG, "[get_vendor_object] EXIT: Failed to allocate memory");
         return NULL;
@@ -169,7 +176,6 @@ lwm2m_object_t *get_vendor_object(void) {
     obj->createFunc = prv_create;
     
     ESP_LOGI(TAG, "[get_vendor_object] EXIT: Vendor object created successfully (objID=%d, callbacks set)", VENDOR_OBJECT_ID);
-    ESP_LOGI(TAG, "[get_vendor_object] Current vendor data count: %d/%d", g_vendor_data_count, MAX_VENDOR_DATA);
     
     return obj;
 }
