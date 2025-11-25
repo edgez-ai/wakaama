@@ -4,11 +4,12 @@
 
 #include "liblwm2m.h"
 
-#define VENDOR_OBJECT_ID 9999
+#define VENDOR_OBJECT_ID 10299
 
 typedef struct {
 	uint16_t instance_id;
-	char public_key[128]; // Adjust size as needed
+	int64_t vendor_id;  // Resource 0: Vendor ID
+	uint32_t mac_oui;   // Resource 1: MAC OUI (24-bit, 0-16777215)
 } vendor_data_t;
 
 lwm2m_object_t *get_vendor_object(void);
