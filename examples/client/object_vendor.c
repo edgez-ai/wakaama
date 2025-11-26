@@ -68,13 +68,56 @@ static uint8_t prv_read(lwm2m_context_t *contextP, uint16_t instanceId, int *num
 }
 
 static uint8_t prv_write(lwm2m_context_t *contextP, uint16_t instanceId, int numData, lwm2m_data_t *dataArray, lwm2m_object_t *objectP, lwm2m_write_type_t writeType) {
-    ESP_LOGW(TAG, "[prv_write] ENTER: instanceId=%d, numData=%d, writeType=%d", instanceId, numData, writeType);
+    ESP_LOGI(TAG, "[prv_write] ENTER: instanceId=%d, numData=%d, writeType=%d", instanceId, numData, writeType);
     for (int i = 0; i < numData; i++) {
-        ESP_LOGW(TAG, "[prv_write] Resource[%d]: id=%d, type=%d", i, dataArray[i].id, dataArray[i].type);
+        ESP_LOGI(TAG, "[prv_write] Resource[%d]: id=%d, type=%d", i, dataArray[i].id, dataArray[i].type);
     }
-    // All resources are read-only, reject writes
-    ESP_LOGW(TAG, "[prv_write] EXIT: Write not allowed on read-only vendor object (COAP_405)");
-    return COAP_405_METHOD_NOT_ALLOWED;
+    
+    // Find the vendor instance
+    vendor_instance_t * instanceP = prv_find_instance(objectP, instanceId);
+    
+    if (instanceP == NULL) {
+        ESP_LOGE(TAG, "[prv_write] Instance %d not found", instanceId);
+        return COAP_404_NOT_FOUND;
+    }
+    
+    // Process each resource to write
+    for (int i = 0; i < numData; i++) {
+        switch (dataArray[i].id) {
+            case RID_VENDOR_ID: {
+                int64_t value;
+                if (lwm2m_data_decode_int(&dataArray[i], &value) == 1) {
+                    instanceP->vendor_id = value;
+                    ESP_LOGI(TAG, "[prv_write] Updated vendor_id: %lld", value);
+                } else {
+                    ESP_LOGE(TAG, "[prv_write] Failed to decode vendor_id (type=%d)", dataArray[i].type);
+                    return COAP_400_BAD_REQUEST;
+                }
+                break;
+            }
+            case RID_MAC_OUI: {
+                int64_t value;
+                if (lwm2m_data_decode_int(&dataArray[i], &value) == 1) {
+                    if (value < 0 || value > 16777215) {
+                        ESP_LOGE(TAG, "[prv_write] MAC OUI out of range: %lld (must be 0-16777215)", value);
+                        return COAP_400_BAD_REQUEST;
+                    }
+                    instanceP->mac_oui = (uint32_t)value;
+                    ESP_LOGI(TAG, "[prv_write] Updated mac_oui: %u (0x%06X)", instanceP->mac_oui, instanceP->mac_oui);
+                } else {
+                    ESP_LOGE(TAG, "[prv_write] Failed to decode mac_oui (type=%d)", dataArray[i].type);
+                    return COAP_400_BAD_REQUEST;
+                }
+                break;
+            }
+            default:
+                ESP_LOGE(TAG, "[prv_write] Unknown resource ID: %d", dataArray[i].id);
+                return COAP_404_NOT_FOUND;
+        }
+    }
+    
+    ESP_LOGI(TAG, "[prv_write] EXIT: SUCCESS (COAP_204_CHANGED)");
+    return COAP_204_CHANGED;
 }
 
 static uint8_t prv_execute(lwm2m_context_t *contextP, uint16_t instanceId, uint16_t resourceId, uint8_t *buffer, int length, lwm2m_object_t *objectP) {
