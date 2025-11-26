@@ -46,7 +46,7 @@ target_compile_definitions(${COMPONENT_TARGET}
                     "WITH_LWIP"
                     "WITH_SHA256"
                     "WITH_ECC"
-                    "USE_LWM2M_TRANSPORT_WRAPPER"
+                    # "USE_LWM2M_TRANSPORT_WRAPPER"
                     )
 
 set(USES_TERMINAL_DOWNLOAD TRUE)
