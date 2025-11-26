@@ -32,7 +32,8 @@ typedef enum {
     CONNECTION_WIFI = 0,
     CONNECTION_BLE = 1,
     CONNECTION_LORA = 2,
-    CONNECTION_RS485 = 3
+    CONNECTION_RS485 = 3,
+    CONNECTION_HALOW = 4
 } connection_type_t;
 
 // Callback function type for updating device instance_id in external storage
@@ -45,7 +46,7 @@ typedef void (*gateway_device_delete_callback_t)(uint32_t device_id, uint16_t in
 typedef void (*gateway_registration_update_callback_t)(void);
 
 // Callback function type for handling PSK and identity write from server
-typedef void (*gateway_psk_write_callback_t)(uint32_t device_id, uint16_t instance_id, const char *identity, const uint8_t *psk, size_t psk_length);
+typedef void (*gateway_psk_write_callback_t)(uint32_t device_id, uint16_t instance_id, const char *identity, const uint8_t *psk, size_t psk_length, const char *server);
 
 // Structure to hold callback functions
 typedef struct {
@@ -70,6 +71,8 @@ typedef struct _gateway_instance_
     uint32_t model;                    // Device model (read-only)
     char * identity;                   // Device identity for authentication (read-write)
     char * psk;                        // Pre-Shared Key for device authentication (read-write)
+    char * server;                     // Server information (read-write)
+    char * mac_address;                // Device MAC address (read-only)
 } gateway_instance_t;
 
 /*
@@ -80,7 +83,7 @@ void free_object_gateway(lwm2m_object_t * objectP);
 void display_gateway_object(lwm2m_object_t * objectP);
 
 // Instance management functions
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model);
+uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model, const char *mac_address);
 uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 
 // Find instance by internal instanceId (ring buffer index)
@@ -101,6 +104,9 @@ int gateway_get_model(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t *o
 
 // Device status update helpers
 uint8_t gateway_update_device_status(lwm2m_object_t * objectP, uint16_t instanceId, bool online);
+
+// Set MAC address for a device
+uint8_t gateway_set_mac_address(lwm2m_object_t * objectP, uint16_t instanceId, const char *mac_address);
 
 // Set callback for device instance_id updates
 void gateway_set_device_update_callback(lwm2m_object_t * objectP, gateway_device_update_callback_t callback);
