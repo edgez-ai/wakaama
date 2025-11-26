@@ -57,6 +57,8 @@ typedef struct {
     int test_integer;
     char test_string[128];
     char multi_string[5][128]; // Support up to 5 multiple strings
+    uint8_t *image_data;        // Pointer to image buffer (opaque data)
+    size_t image_len;           // Length of image data
 } test_data_t;
 
 lwm2m_object_t *get_test_object(void);

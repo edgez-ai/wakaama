@@ -114,6 +114,8 @@
 #define RES_TEST_STRING 110
 #define RES_MULTI_STRING 1110
 #define RES_TEST_INTEGER 120
+#define RES_IMAGE_DATA 130  // Opaque data for camera image (old)
+#define RES_IMAGE_OPAQUE 1150  // Opaque data for camera image (new)
 
 
 // basic check that the time offset value is at ISO 8601 format
@@ -192,6 +194,20 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             lwm2m_data_encode_string(testDataP->multi_string[i], subTlvP + i);
         }
         return COAP_205_CONTENT;
+    case RES_IMAGE_DATA:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (testDataP->image_data && testDataP->image_len > 0) {
+            lwm2m_data_encode_opaque(testDataP->image_data, testDataP->image_len, dataP);
+            return COAP_205_CONTENT;
+        }
+        return COAP_404_NOT_FOUND;
+    case RES_IMAGE_OPAQUE:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (testDataP->image_data && testDataP->image_len > 0) {
+            lwm2m_data_encode_opaque(testDataP->image_data, testDataP->image_len, dataP);
+            return COAP_205_CONTENT;
+        }
+        return COAP_404_NOT_FOUND;
     default:
         return COAP_404_NOT_FOUND;
     }
@@ -502,6 +518,8 @@ lwm2m_object_t *get_test_object(void) {
             for (int i = 0; i < 5; i++) {
                 sprintf(data->multi_string[i], "multi_%d", i);
             }
+            data->image_data = NULL;
+            data->image_len = 0;
         }
         else
         {
