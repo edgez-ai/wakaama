@@ -67,7 +67,7 @@
 #define RES_O_CERTIFICATE_USAGE     10
 
 // Default values
-#define DEFAULT_URI                 "mqtt://mqtt.broker.com:1883"
+#define DEFAULT_URI                 ""
 #define DEFAULT_CLIENT_ID           "lwm2m_client"
 #define DEFAULT_KEEP_ALIVE          60
 #define DEFAULT_CLEAN_SESSION       true
@@ -362,10 +362,9 @@ static uint8_t prv_mqtt_broker_discover(lwm2m_context_t *contextP,
                 break;
 
             case RES_O_PASSWORD:
-                if (targetP->passwordLen == 0)
-                {
-                    result = COAP_404_NOT_FOUND;
-                }
+                // Always allow password resource to be discovered and written,
+                // even if currently empty (passwordLen == 0)
+                // This ensures bootstrap server can provision the password
                 break;
 
             case RES_O_PUBLIC_KEY_ID:
@@ -535,6 +534,7 @@ static uint8_t prv_mqtt_broker_write(lwm2m_context_t *contextP,
                 {
                     memcpy(targetP->username, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
                     targetP->username[dataArray[i].value.asBuffer.length] = '\0';
+                    fprintf(stdout, "🔽 MQTT Broker Username Write: %s\n", targetP->username);
                 }
                 result = COAP_204_CHANGED;
             }
@@ -556,6 +556,36 @@ static uint8_t prv_mqtt_broker_write(lwm2m_context_t *contextP,
                     {
                         memcpy(targetP->password, dataArray[i].value.asBuffer.buffer, dataArray[i].value.asBuffer.length);
                         targetP->passwordLen = dataArray[i].value.asBuffer.length;
+                        
+                        // Debug logging for password write
+                        fprintf(stdout, "🔽 MQTT Broker Password Write: length=%zu, type=%d\n", 
+                                targetP->passwordLen, dataArray[i].type);
+                        
+                        // Print password as string if printable, otherwise as hex
+                        bool is_printable = true;
+                        for (size_t j = 0; j < targetP->passwordLen; j++)
+                        {
+                            if (targetP->password[j] < 32 || targetP->password[j] > 126)
+                            {
+                                is_printable = false;
+                                break;
+                            }
+                        }
+                        
+                        if (is_printable)
+                        {
+                            fprintf(stdout, "🔽 Password (string): %.*s\n", 
+                                    (int)targetP->passwordLen, targetP->password);
+                        }
+                        else
+                        {
+                            fprintf(stdout, "🔽 Password (hex): ");
+                            for (size_t j = 0; j < targetP->passwordLen; j++)
+                            {
+                                fprintf(stdout, "%02x", targetP->password[j]);
+                            }
+                            fprintf(stdout, "\n");
+                        }
                     }
                     else
                     {
@@ -563,10 +593,16 @@ static uint8_t prv_mqtt_broker_write(lwm2m_context_t *contextP,
                         break;
                     }
                 }
+                else
+                {
+                    fprintf(stdout, "🔽 MQTT Broker Password Write: empty password received\n");
+                }
                 result = COAP_204_CHANGED;
             }
             else
             {
+                fprintf(stdout, "🔽 MQTT Broker Password Write: BAD REQUEST - type=%d, length=%zu\n",
+                        dataArray[i].type, dataArray[i].value.asBuffer.length);
                 result = COAP_400_BAD_REQUEST;
             }
             break;
