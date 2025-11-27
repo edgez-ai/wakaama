@@ -96,7 +96,7 @@ typedef struct _mqtt_broker_instance_
     bool        cleanSession;
     uint16_t    keepAlive;
     char        username[128];
-    uint8_t     password[256];
+    char        password[256];
     size_t      passwordLen;
     uint8_t     securityMode;
     uint8_t     publicKeyOrIdentity[1024];
@@ -149,7 +149,7 @@ static uint8_t prv_get_value(lwm2m_data_t * dataP,
     case RES_O_PASSWORD:
         if (targetP->passwordLen > 0)
         {
-            lwm2m_data_encode_opaque(targetP->password, targetP->passwordLen, dataP);
+            lwm2m_data_encode_string(targetP->password, dataP);
             return COAP_205_CONTENT;
         }
         return COAP_404_NOT_FOUND;
