@@ -485,7 +485,7 @@ lwm2m_object_t *get_test_object(void) {
     if (NULL != testObj)
     {
         memset(testObj, 0, sizeof(lwm2m_object_t));
-        testObj->objID = 3442; // Assign a custom object ID for test object
+        testObj->objID = TEST_OBJECT_ID; // Use the constant from lwm2mclient.h
         testObj->instanceList = (lwm2m_list_t *)lwm2m_malloc(sizeof(lwm2m_list_t));
         if (NULL != testObj->instanceList)
         {
