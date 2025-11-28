@@ -114,6 +114,7 @@
 #define RES_TEST_STRING 110
 #define RES_MULTI_STRING 1110
 #define RES_TEST_INTEGER 120
+#define RES_OPAQUE_IMAGE 1150  // Opaque resource for camera images
 
 
 // basic check that the time offset value is at ISO 8601 format
@@ -192,6 +193,13 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
             lwm2m_data_encode_string(testDataP->multi_string[i], subTlvP + i);
         }
         return COAP_205_CONTENT;
+    case RES_OPAQUE_IMAGE:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        if (testDataP->opaque_data && testDataP->opaque_len > 0) {
+            lwm2m_data_encode_opaque(testDataP->opaque_data, testDataP->opaque_len, dataP);
+            return COAP_205_CONTENT;
+        }
+        return COAP_404_NOT_FOUND;
     default:
         return COAP_404_NOT_FOUND;
     }
@@ -502,6 +510,8 @@ lwm2m_object_t *get_test_object(void) {
             for (int i = 0; i < 5; i++) {
                 sprintf(data->multi_string[i], "multi_%d", i);
             }
+            data->opaque_data = NULL;
+            data->opaque_len = 0;
         }
         else
         {
@@ -517,6 +527,11 @@ void free_object_test(lwm2m_object_t * objectP)
 {
     if (NULL != objectP->userData)
     {
+        test_data_t* data = (test_data_t*)objectP->userData;
+        if (data->opaque_data) {
+            lwm2m_free(data->opaque_data);
+            data->opaque_data = NULL;
+        }
         lwm2m_free(objectP->userData);
         objectP->userData = NULL;
     }

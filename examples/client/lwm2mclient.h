@@ -57,6 +57,8 @@ typedef struct {
     int test_integer;
     char test_string[128];
     char multi_string[5][128]; // Support up to 5 multiple strings
+    uint8_t* opaque_data;      // Opaque bytes for camera images
+    size_t opaque_len;         // Length of opaque data
 } test_data_t;
 
 lwm2m_object_t *get_test_object(void);
@@ -103,7 +105,7 @@ void display_location_object(lwm2m_object_t * objectP);
 /*
  * object_test.c
  */
-#define TEST_OBJECT_ID 31024
+#define TEST_OBJECT_ID 3442
 lwm2m_object_t * get_test_object(void);
 void free_test_object(lwm2m_object_t * object);
 void display_test_object(lwm2m_object_t * objectP);
