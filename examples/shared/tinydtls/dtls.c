@@ -2004,7 +2004,11 @@ dtls_send_handshake_msg(dtls_context_t *ctx,
 
 #ifdef DTLS_CONSTRAINED_STACK
 static dtls_mutex_t static_mutex = DTLS_MUTEX_INITIALIZER;
+#ifdef ESP_PLATFORM
+__attribute__((section(".ext_ram.bss"))) static unsigned char sendbuf[DTLS_MAX_BUF];
+#else
 static unsigned char sendbuf[DTLS_MAX_BUF];
+#endif
 #endif /* DTLS_CONSTRAINED_STACK */
 
 /**

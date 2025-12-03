@@ -53,7 +53,7 @@ typedef unsigned char uint48[6];
 #define DTLS_MAX_BUF 120
 #endif /* DTLS_ECC */
 #else /* WITH_CONTIKI */
-#define DTLS_MAX_BUF 4096
+#define DTLS_MAX_BUF 48384
 #endif /* WITH_CONTIKI || RIOT_VERSION */
 #endif
 

@@ -30,7 +30,7 @@ target_compile_definitions(${COMPONENT_TARGET}
                     PUBLIC
                     "LWM2M_CLIENT_MODE"
                     "LWM2M_COAP_DEFAULT_BLOCK_SIZE=512"
-                    "LWM2M_COAP_MAX_MESSAGE_SIZE=2048"
+                    "LWM2M_COAP_MAX_MESSAGE_SIZE=48384"
                     "LWM2M_COAP_DEFAULT_MAX_RETRANSMIT=4"
                     "LWM2M_COAP_SEPARATE_TIMEOUT=15"
                     "LWM2M_SUPPORT_SENML_JSON"
@@ -43,6 +43,7 @@ target_compile_definitions(${COMPONENT_TARGET}
                     "ESPIDF_VERSION"
                     "SHA2_USE_INTTYPES_H"
                     "DTLS_CHECK_CONTENTTYPE"
+                    "DTLS_CONSTRAINED_STACK"
                     "WITH_LWIP"
                     "WITH_SHA256"
                     "WITH_ECC"
