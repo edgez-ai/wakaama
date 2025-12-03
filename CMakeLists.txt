@@ -22,7 +22,7 @@ idf_component_register(
         "examples/shared"
 
     INCLUDE_DIRS
-        "include" "examples/shared" "examples/shared/tinydtls"
+        "include" "examples/shared" "examples/shared/tinydtls" "examples/client"
     REQUIRES "esp_hw_support"
     )
 
