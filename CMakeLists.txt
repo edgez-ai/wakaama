@@ -23,7 +23,7 @@ idf_component_register(
 
     INCLUDE_DIRS
         "include" "examples/shared" "examples/shared/tinydtls" "examples/client"
-    REQUIRES "esp_hw_support"
+    REQUIRES "esp_hw_support" "esp_https_ota" "app_update" "esp_http_client"
     )
 
 target_compile_definitions(${COMPONENT_TARGET}
