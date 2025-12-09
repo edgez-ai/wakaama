@@ -8,7 +8,7 @@
 #include "er-coap-13/er-coap-13.h"
 
 /**
- * Send binary data to a custom CoAP endpoint
+ * Send binary data to a custom CoAP endpoint with block-wise transfer
  * 
  * @param contextP LwM2M context pointer
  * @param path URI path for the CoAP POST request (e.g., "image")
@@ -36,36 +36,71 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
         return -3;
     }
     
-    // Create a CoAP transaction for POST request
-    lwm2m_transaction_t *transaction = transaction_new(
-        server->sessionH,
-        COAP_POST,
-        NULL,  // no altPath
-        NULL,  // no URI (we'll set path directly)
-        contextP->nextMID++,
-        0,     // token_len
-        NULL   // token
-    );
+    // Maximum safe payload size per block (leave room for CoAP headers)
+    // DTLS max record is 16KB (16384), use 15KB to leave room for CoAP/DTLS overhead
+    const size_t MAX_BLOCK_SIZE = 15360; // 15KB
     
-    if (!transaction) {
-        return -4;
+    // If data fits in one message, send it directly
+    if (dataLen <= MAX_BLOCK_SIZE) {
+        lwm2m_transaction_t *transaction = transaction_new(
+            server->sessionH,
+            COAP_POST,
+            NULL, NULL,
+            contextP->nextMID++,
+            0, NULL
+        );
+        
+        if (!transaction) {
+            return -4;
+        }
+        
+        coap_set_header_uri_path(transaction->message, path);
+        coap_set_header_content_type(transaction->message, contentType);
+        coap_set_payload(transaction->message, data, dataLen);
+        
+        contextP->transactionList = (lwm2m_transaction_t*)LWM2M_LIST_ADD(
+            contextP->transactionList, transaction);
+        
+        return transaction_send(contextP, transaction);
     }
     
-    // Set URI path
-    coap_set_header_uri_path(transaction->message, path);
+    // Send data in chunks using multiple POST requests
+    size_t offset = 0;
+    int chunk_num = 0;
     
-    // Set content type
-    coap_set_header_content_type(transaction->message, contentType);
+    while (offset < dataLen) {
+        size_t chunk_size = (dataLen - offset > MAX_BLOCK_SIZE) ? MAX_BLOCK_SIZE : (dataLen - offset);
+        
+        lwm2m_transaction_t *transaction = transaction_new(
+            server->sessionH,
+            COAP_POST,
+            NULL, NULL,
+            contextP->nextMID++,
+            0, NULL
+        );
+        
+        if (!transaction) {
+            return -4;
+        }
+        
+        coap_set_header_uri_path(transaction->message, path);
+        coap_set_header_content_type(transaction->message, contentType);
+        coap_set_payload(transaction->message, data + offset, chunk_size);
+        
+        contextP->transactionList = (lwm2m_transaction_t*)LWM2M_LIST_ADD(
+            contextP->transactionList, transaction);
+        
+        int result = transaction_send(contextP, transaction);
+        if (result != 0) {
+            return result;
+        }
+        
+        offset += chunk_size;
+        chunk_num++;
+        
+        // Small delay between chunks to avoid overwhelming the network
+        // (wakaama will handle retransmissions)
+    }
     
-    // Set the payload (binary data)
-    coap_set_payload(transaction->message, data, dataLen);
-    
-    // Add transaction to the context's transaction list
-    contextP->transactionList = (lwm2m_transaction_t*)LWM2M_LIST_ADD(
-        contextP->transactionList, transaction);
-    
-    // Send the transaction
-    int result = transaction_send(contextP, transaction);
-    
-    return result;
+    return 0;
 }
