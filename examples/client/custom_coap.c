@@ -8,6 +8,7 @@
 #include "internals.h"
 #include "er-coap-13/er-coap-13.h"
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef LWM2M_WITH_LOGS
 #include <stdio.h>
@@ -15,6 +16,9 @@
 #else
 #define LOG(...)
 #endif
+
+// Global flag to track if a block transfer is in progress
+static bool g_transfer_in_progress = false;
 
 // Structure to hold block transfer state
 typedef struct {
@@ -117,14 +121,17 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
             }
         } else {
             LOG("custom_coap: All blocks sent successfully (%zu bytes total)\n", state->dataLen);
+            g_transfer_in_progress = false;
             lwm2m_free(state);
         }
     } else if (packet && packet->code == COAP_204_CHANGED) {
         LOG("custom_coap: Transfer complete (%zu bytes total)\n", state->dataLen);
+        g_transfer_in_progress = false;
         lwm2m_free(state);
     } else {
         LOG("custom_coap: Block transfer failed with code %d.%02d\n",
             packet ? packet->code >> 5 : 0, packet ? packet->code & 0x1F : 0);
+        g_transfer_in_progress = false;
         lwm2m_free(state);
     }
 }
@@ -148,6 +155,12 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
     if (!contextP || !path || !data || dataLen == 0) {
         LOG("custom_coap: Invalid parameters\n");
         return -1;
+    }
+    
+    // Check if a transfer is already in progress
+    if (g_transfer_in_progress) {
+        LOG("custom_coap: Transfer already in progress, rejecting new request\n");
+        return -6;  // New error code for transfer in progress
     }
     
     // Check if context is ready
@@ -239,9 +252,13 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
     int result = transaction_send(contextP, transaction);
     if (result != 0) {
         LOG("custom_coap: Failed to send first block (error=%d)\n", result);
+        g_transfer_in_progress = false;
         lwm2m_free(state);
         return result;
     }
+    
+    // Mark transfer as in progress
+    g_transfer_in_progress = true;
     
     LOG("custom_coap: First block sent, waiting for acknowledgment\n");
     return 0;
