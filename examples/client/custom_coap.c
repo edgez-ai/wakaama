@@ -78,9 +78,10 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
             size_t block_len = (remaining > state->blockSize) ? state->blockSize : remaining;
             uint8_t more = (remaining > state->blockSize) ? 1 : 0;
             
-            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, data_ptr=%p)\n",
-                (unsigned long)state->currentBlock, state->offset, block_len, more, 
-                (void*)(state->data + state->offset));
+            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, first_bytes=%02x %02x %02x %02x)\n",
+                (unsigned long)state->currentBlock, state->offset, block_len, more,
+                state->data[state->offset], state->data[state->offset+1], 
+                state->data[state->offset+2], state->data[state->offset+3]);
             
             // Create transaction for next block
             // IMPORTANT: Use the same token as the first block so server can track the transfer
