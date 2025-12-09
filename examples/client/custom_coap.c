@@ -10,7 +10,10 @@
 #include <string.h>
 #include <stdbool.h>
 
-#ifdef LWM2M_WITH_LOGS
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+#define LOG(...) ESP_LOGI("custom_coap", __VA_ARGS__)
+#elif defined(LWM2M_WITH_LOGS)
 #include <stdio.h>
 #define LOG(...) fprintf(stderr, __VA_ARGS__)
 #else
@@ -76,12 +79,22 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
         if (state->offset < state->dataLen) {
             size_t remaining = state->dataLen - state->offset;
             size_t block_len = (remaining > state->blockSize) ? state->blockSize : remaining;
-            uint8_t more = (remaining > state->blockSize) ? 1 : 0;
+            // Set more=1 if there are more blocks AFTER this one
+            uint8_t more = (remaining > block_len) ? 1 : 0;
             
-            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, first_bytes=%02x %02x %02x %02x)\n",
-                (unsigned long)state->currentBlock, state->offset, block_len, more,
+            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, remaining=%zu, total=%zu)\n",
+                (unsigned long)state->currentBlock, state->offset, block_len, more, remaining, state->dataLen);
+            LOG("   First 4 bytes: %02x %02x %02x %02x\n",
                 state->data[state->offset], state->data[state->offset+1], 
                 state->data[state->offset+2], state->data[state->offset+3]);
+            if (block_len >= 16) {
+                size_t last_offset = state->offset + block_len - 16;
+                LOG("   Last 16 bytes of block: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                    state->data[last_offset], state->data[last_offset+1], state->data[last_offset+2], state->data[last_offset+3],
+                    state->data[last_offset+4], state->data[last_offset+5], state->data[last_offset+6], state->data[last_offset+7],
+                    state->data[last_offset+8], state->data[last_offset+9], state->data[last_offset+10], state->data[last_offset+11],
+                    state->data[last_offset+12], state->data[last_offset+13], state->data[last_offset+14], state->data[last_offset+15]);
+            }
             
             // Create transaction for next block
             // IMPORTANT: Use the same token as the first block so server can track the transfer
@@ -121,12 +134,14 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
                 lwm2m_free(state);
             }
         } else {
-            LOG("custom_coap: All blocks sent successfully (%zu bytes total)\n", state->dataLen);
+            LOG("custom_coap: ✅ All blocks sent successfully - total %zu bytes (offset reached: %zu)\n", 
+                state->dataLen, state->offset);
             g_transfer_in_progress = false;
             lwm2m_free(state);
         }
     } else if (packet && packet->code == COAP_204_CHANGED) {
-        LOG("custom_coap: Transfer complete (%zu bytes total)\n", state->dataLen);
+        LOG("custom_coap: ✅ Transfer complete - %zu bytes total (offset: %zu)\n", 
+            state->dataLen, state->offset);
         g_transfer_in_progress = false;
         lwm2m_free(state);
     } else {
@@ -217,8 +232,17 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
     size_t block_len = (dataLen > BLOCK_SIZE) ? BLOCK_SIZE : dataLen;
     uint8_t more = (dataLen > BLOCK_SIZE) ? 1 : 0;
     
-    LOG("custom_coap: Sending block 0 (offset=0, len=%zu, more=%d, data_ptr=%p, first_bytes=%02x %02x %02x %02x)\n", 
-        block_len, more, (void*)data, data[0], data[1], data[2], data[3]);
+    LOG("custom_coap: Sending block 0 (offset=0, len=%zu, more=%d, total_len=%zu)\n", 
+        block_len, more, dataLen);
+    LOG("   First 4 bytes: %02x %02x %02x %02x\n", data[0], data[1], data[2], data[3]);
+    if (block_len >= 16) {
+        size_t last_offset = block_len - 16;
+        LOG("   Last 16 bytes of block: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            data[last_offset], data[last_offset+1], data[last_offset+2], data[last_offset+3],
+            data[last_offset+4], data[last_offset+5], data[last_offset+6], data[last_offset+7],
+            data[last_offset+8], data[last_offset+9], data[last_offset+10], data[last_offset+11],
+            data[last_offset+12], data[last_offset+13], data[last_offset+14], data[last_offset+15]);
+    }
     
     // Create transaction for first block
     lwm2m_transaction_t *transaction = transaction_new(
