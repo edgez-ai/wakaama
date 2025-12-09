@@ -27,6 +27,8 @@ typedef struct {
     size_t offset;
     lwm2m_context_t *contextP;
     lwm2m_server_t *server;
+    uint8_t token[4];  // Token to maintain consistency across blocks
+    uint8_t tokenLen;
 } block_transfer_state_t;
 
 // Callback for handling Block1 transfer responses
@@ -54,12 +56,17 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
     
     // Check response code
     if (packet && packet->code == COAP_231_CONTINUE) {
-        LOG("custom_coap: Block %lu acknowledged, continuing...\n", (unsigned long)state->currentBlock);
+        LOG("custom_coap: Block %lu acknowledged (current offset=%zu)\n", 
+            (unsigned long)state->currentBlock, state->offset);
         
-        // Move to next block
-        state->offset += (state->dataLen - state->offset > state->blockSize) ? 
-                         state->blockSize : (state->dataLen - state->offset);
+        // Move to next block - increment offset by the actual block size that was sent
+        size_t last_block_size = (state->dataLen - state->offset > state->blockSize) ? 
+                                  state->blockSize : (state->dataLen - state->offset);
+        state->offset += last_block_size;
         state->currentBlock++;
+        
+        LOG("custom_coap: After update: block=%lu, offset=%zu\n",
+            (unsigned long)state->currentBlock, state->offset);
         
         // Check if there are more blocks to send
         if (state->offset < state->dataLen) {
@@ -67,16 +74,18 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
             size_t block_len = (remaining > state->blockSize) ? state->blockSize : remaining;
             uint8_t more = (remaining > state->blockSize) ? 1 : 0;
             
-            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d)\n",
-                (unsigned long)state->currentBlock, state->offset, block_len, more);
+            LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, data_ptr=%p)\n",
+                (unsigned long)state->currentBlock, state->offset, block_len, more, 
+                (void*)(state->data + state->offset));
             
             // Create transaction for next block
+            // IMPORTANT: Use the same token as the first block so server can track the transfer
             lwm2m_transaction_t *nextTrans = transaction_new(
                 state->server->sessionH,
                 COAP_POST,
                 NULL, NULL,
                 contextP->nextMID++,
-                0, NULL
+                state->tokenLen, state->token
             );
             
             if (!nextTrans) {
@@ -175,23 +184,27 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
     state->contextP = contextP;
     state->server = server;
     
+    // Generate a unique token for this block transfer
+    // This is crucial for the server to track the blockwise transfer
+    // Store the token in the state so all blocks use the same token
+    state->token[0] = (contextP->nextMID >> 24) & 0xFF;
+    state->token[1] = (contextP->nextMID >> 16) & 0xFF;
+    state->token[2] = (contextP->nextMID >> 8) & 0xFF;
+    state->token[3] = contextP->nextMID & 0xFF;
+    state->tokenLen = 4;
+    
     uint32_t num_blocks = (dataLen + BLOCK_SIZE - 1) / BLOCK_SIZE;
     LOG("custom_coap: Starting block transfer: %zu bytes in %lu blocks of %u bytes each\n", 
         dataLen, (unsigned long)num_blocks, BLOCK_SIZE);
+    LOG("custom_coap: Using token: %02x%02x%02x%02x\n", 
+        state->token[0], state->token[1], state->token[2], state->token[3]);
     
     // Send first block
     size_t block_len = (dataLen > BLOCK_SIZE) ? BLOCK_SIZE : dataLen;
     uint8_t more = (dataLen > BLOCK_SIZE) ? 1 : 0;
     
-    LOG("custom_coap: Sending block 0 (offset=0, len=%zu, more=%d)\n", block_len, more);
-    
-    // Generate a unique token for this block transfer
-    // This is crucial for the server to track the blockwise transfer
-    uint8_t token[4];
-    token[0] = (contextP->nextMID >> 24) & 0xFF;
-    token[1] = (contextP->nextMID >> 16) & 0xFF;
-    token[2] = (contextP->nextMID >> 8) & 0xFF;
-    token[3] = contextP->nextMID & 0xFF;
+    LOG("custom_coap: Sending block 0 (offset=0, len=%zu, more=%d, data_ptr=%p, first_bytes=%02x %02x %02x %02x)\n", 
+        block_len, more, (void*)data, data[0], data[1], data[2], data[3]);
     
     // Create transaction for first block
     lwm2m_transaction_t *transaction = transaction_new(
@@ -199,7 +212,7 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
         COAP_POST,
         NULL, NULL,
         contextP->nextMID++,
-        4, token  // Use 4-byte token
+        state->tokenLen, state->token  // Use the token stored in state
     );
     
     if (!transaction) {
