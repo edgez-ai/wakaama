@@ -43,32 +43,7 @@ static uint32_t crc32_ieee(const uint8_t *data, size_t len)
     return ~crc;
 }
 
-// Log block digest and edge bytes to help detect corruption end-to-end
-static void log_block_digest(uint32_t block_num, size_t offset, const uint8_t *data, size_t len)
-{
-    uint32_t crc = crc32_ieee(data, len);
-    size_t head_len = len < 8 ? len : 8;
-    size_t tail_len = len < 8 ? 0 : 8;  // avoid double-print when len < 8
-    char head_buf[3 * 8 + 1] = {0};
-    for (size_t i = 0; i < head_len; i++) {
-        snprintf(head_buf + 3 * i, sizeof(head_buf) - 3 * i, "%02x ", data[i]);
-    }
 
-    char tail_buf[3 * 8 + 1] = {0};
-    if (tail_len > 0) {
-        for (size_t i = 0; i < tail_len; i++) {
-            size_t idx = len - tail_len + i;
-            snprintf(tail_buf + 3 * i, sizeof(tail_buf) - 3 * i, "%02x ", data[idx]);
-        }
-    }
-
-    LOG("custom_coap: Block %lu CRC32=0x%08lx (offset=%zu, len=%zu)\n",
-        (unsigned long)block_num, (unsigned long)crc, offset, len);
-    LOG("custom_coap:   Begin bytes (%zu): %s\n", head_len, head_buf);
-    if (tail_len > 0) {
-        LOG("custom_coap:   End bytes (%zu): %s\n", tail_len, tail_buf);
-    }
-}
 
 // Structure to hold block transfer state
 typedef struct {
@@ -106,10 +81,6 @@ static void send_block_window(lwm2m_context_t *contextP, block_transfer_state_t 
         size_t remaining = state->dataLen - block_offset;
         size_t block_len = (remaining > state->blockSize) ? state->blockSize : remaining;
         uint8_t more = (remaining > block_len) ? 1 : 0;
-        
-        LOG("custom_coap: Sending block %lu (offset=%zu, len=%zu, more=%d, remaining=%zu, total=%zu)\n",
-            (unsigned long)state->nextBlockToSend, block_offset, block_len, more, remaining, state->dataLen);
-        log_block_digest(state->nextBlockToSend, block_offset, state->data + block_offset, block_len);
         
         // Create transaction for this block
         lwm2m_transaction_t *trans = transaction_new(
@@ -159,8 +130,6 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
     coap_packet_t *packet = (coap_packet_t *)message;
     block_transfer_state_t *state = (block_transfer_state_t *)transacP->userData;
     
-    LOG("custom_coap: block_transfer_callback invoked! packet=%p, state=%p\n", packet, state);
-    
     if (!state) {
         LOG("custom_coap: No transfer state in callback\n");
         return;
@@ -173,13 +142,8 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
         return;
     }
     
-    LOG("custom_coap: Response code: %d.%02d\n", packet->code >> 5, packet->code & 0x1F);
-    
     // Check response code
     if (packet && packet->code == COAP_231_CONTINUE) {
-        LOG("custom_coap: Block %lu acknowledged (current offset=%zu)\n", 
-            (unsigned long)state->currentBlock, state->offset);
-        
         // Update last acknowledged block
         if (state->currentBlock > state->lastAckedBlock) {
             state->lastAckedBlock = state->currentBlock;
@@ -191,9 +155,6 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
         state->offset += last_block_size;
         state->currentBlock++;
         
-        LOG("custom_coap: After update: block=%lu, offset=%zu\n",
-            (unsigned long)state->currentBlock, state->offset);
-        
         // Check if there are more blocks to send
         if (state->offset < state->dataLen) {
             // Send next window of blocks if we haven't already sent them
@@ -201,14 +162,12 @@ static void block_transfer_callback(lwm2m_context_t *contextP,
                 send_block_window(contextP, state);
             }
         } else {
-            LOG("custom_coap: ✅ All blocks sent successfully - total %zu bytes (offset reached: %zu)\n", 
-                state->dataLen, state->offset);
+            LOG("custom_coap: ✅ Transfer complete: %zu bytes\n", state->dataLen);
             g_transfer_in_progress = false;
             lwm2m_free(state);
         }
     } else if (packet && packet->code == COAP_204_CHANGED) {
-        LOG("custom_coap: ✅ Transfer complete - %zu bytes total (offset: %zu)\n", 
-            state->dataLen, state->offset);
+        LOG("custom_coap: ✅ Transfer complete: %zu bytes\n", state->dataLen);
         g_transfer_in_progress = false;
         lwm2m_free(state);
     } else {
@@ -292,18 +251,13 @@ int lwm2m_send_coap_post(lwm2m_context_t *contextP, const char *path,
     state->tokenLen = 4;
     
     uint32_t num_blocks = (dataLen + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    LOG("custom_coap: Starting block transfer: %zu bytes in %lu blocks of %u bytes each\n", 
-        dataLen, (unsigned long)num_blocks, BLOCK_SIZE);
-    LOG("custom_coap: Using token: %02x%02x%02x%02x\n", 
-        state->token[0], state->token[1], state->token[2], state->token[3]);
+    LOG("custom_coap: Starting transfer: %zu bytes in %lu blocks\n", 
+        dataLen, (unsigned long)num_blocks);
     
     // Mark transfer as in progress
     g_transfer_in_progress = true;
     
     // Send first window of blocks (pipelined)
-    LOG("custom_coap: Sending initial window of %d blocks\n", COAP_PIPELINE_WINDOW);
     send_block_window(contextP, state);
-    
-    LOG("custom_coap: Initial blocks sent, waiting for acknowledgments\n");
     return 0;
 }
