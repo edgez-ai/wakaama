@@ -493,8 +493,8 @@ int json_parse(lwm2m_uri_t * uriP,
     _record_t * recordArray;
     lwm2m_data_t * parsedP;
 
-    LOG_ARG_DBG("bufferLen: %zd, buffer: \"%.*s\"", bufferLen, (int)bufferLen, STR_NULL2EMPTY((char *)buffer));
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("bufferLen: %d, buffer: \"%.*s\"", bufferLen, bufferLen, STR_NULL2EMPTY((char *)buffer));
+    LOG_URI(uriP);
     *dataP = NULL;
     recordArray = NULL;
     parsedP = NULL;
@@ -652,7 +652,7 @@ int json_parse(lwm2m_uri_t * uriP,
             else
             {
                 /* Base name may have a trailing "/" on a multiple instance
-                 * resource. This isn't valid for a URI string in LwM2M 1.0.
+                 * resource. This isn't valid for a URI string in LWM2M 1.0.
                  * Strip off any trailing "/" to avoid an error. */
                 if (buffer[bnStart + bnLen - 1] == '/') bnLen -= 1;
                 res = lwm2m_stringToUri((char *)buffer + bnStart, bnLen, &baseURI);
@@ -733,11 +733,11 @@ int json_parse(lwm2m_uri_t * uriP,
         *dataP = resultP;
     }
 
-    LOG_ARG_DBG("Parsing successful. count: %d", count);
+    LOG_ARG("Parsing successful. count: %d", count);
     return count;
 
 error:
-    LOG_DBG("Parsing failed");
+    LOG("Parsing failed");
     if (parsedP != NULL)
     {
         lwm2m_data_free(count, parsedP);
@@ -992,8 +992,8 @@ int json_serialize(lwm2m_uri_t * uriP,
     lwm2m_uri_t uri;
 #endif
 
-    LOG_ARG_DBG("size: %d", size);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("size: %d", size);
+    LOG_URI(uriP);
     if (size != 0 && tlvP == NULL) return -1;
 
 #ifndef LWM2M_VERSION_1_0

@@ -308,8 +308,8 @@ int discover_serialize(lwm2m_context_t * contextP,
     lwm2m_attributes_t * paramP;
     lwm2m_attributes_t mergedParam;
 
-    LOG_ARG_DBG("size: %d", size);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("size: %d", size);
+    LOG_URI(uriP);
 
     head = 0;
     LWM2M_URI_RESET(&parentUri);
@@ -327,7 +327,7 @@ int discover_serialize(lwm2m_context_t * contextP,
 
         // get object level attributes
         objParamP = prv_findAttributes(contextP, &tempUri, serverP);
-
+        
         // get object instance level attributes
         tempUri.instanceId = uriP->instanceId;
         instParamP = prv_findAttributes(contextP, &tempUri, serverP);

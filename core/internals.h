@@ -62,25 +62,77 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "bootstrap.h"
-#include "discover.h"
 #include "er-coap-13/er-coap-13.h"
-#include "logging.h"
-#include "management.h"
-#include "objects.h"
-#include "observe.h"
-#include "packet.h"
-#include "registration.h"
-#include "reporting.h"
-#include "uri.h"
-#include "utils.h"
+
+#ifdef LWM2M_WITH_LOGS
+#include <inttypes.h>
+#define LOG(STR) lwm2m_printf("[%s:%d] " STR "\r\n", __func__ , __LINE__)
+#define LOG_ARG(FMT, ...) lwm2m_printf("[%s:%d] " FMT "\r\n", __func__ , __LINE__ , __VA_ARGS__)
+#ifdef LWM2M_VERSION_1_0
+#define LOG_URI(URI)                                                                \
+{                                                                                   \
+    if ((URI) == NULL) lwm2m_printf("[%s:%d] NULL\r\n", __func__ , __LINE__);       \
+    else                                                                            \
+    {                                                                               \
+        lwm2m_printf("[%s:%d] /%d", __func__ , __LINE__ , (URI)->objectId);         \
+        if (LWM2M_URI_IS_SET_INSTANCE(URI)) lwm2m_printf("/%d", (URI)->instanceId); \
+        if (LWM2M_URI_IS_SET_RESOURCE(URI)) lwm2m_printf("/%d", (URI)->resourceId); \
+        lwm2m_printf("\r\n");                                                       \
+    }                                                                               \
+}
+#else
+#define LOG_URI(URI)                                                                \
+    if ((URI) == NULL) lwm2m_printf("[%s:%d] NULL\r\n", __func__ , __LINE__);       \
+    else if (!LWM2M_URI_IS_SET_OBJECT(URI)) lwm2m_printf("[%s:%d] /\r\n", __func__ , __LINE__); \
+    else if (!LWM2M_URI_IS_SET_INSTANCE(URI)) lwm2m_printf("[%s:%d] /%d\r\n", __func__ , __LINE__, (URI)->objectId); \
+    else if (!LWM2M_URI_IS_SET_RESOURCE(URI)) lwm2m_printf("[%s:%d] /%d/%d\r\n", __func__ , __LINE__, (URI)->objectId, (URI)->instanceId); \
+    else if (!LWM2M_URI_IS_SET_RESOURCE_INSTANCE(URI)) lwm2m_printf("[%s:%d] /%d/%d/%d\r\n", __func__ , __LINE__, (URI)->objectId, (URI)->instanceId, (URI)->resourceId); \
+    else lwm2m_printf("[%s:%d] /%d/%d/%d/%d\r\n", __func__ , __LINE__, (URI)->objectId, (URI)->instanceId, (URI)->resourceId, (URI)->resourceInstanceId)
+#endif
+#define STR_STATUS(S)                                           \
+((S) == STATE_DEREGISTERED ? "STATE_DEREGISTERED" :             \
+((S) == STATE_REG_HOLD_OFF ? "STATE_REG_HOLD_OFF" :             \
+((S) == STATE_REG_PENDING ? "STATE_REG_PENDING" :               \
+((S) == STATE_REGISTERED ? "STATE_REGISTERED" :                 \
+((S) == STATE_REG_FAILED ? "STATE_REG_FAILED" :                 \
+((S) == STATE_REG_UPDATE_PENDING ? "STATE_REG_UPDATE_PENDING" : \
+((S) == STATE_REG_UPDATE_NEEDED ? "STATE_REG_UPDATE_NEEDED" :   \
+((S) == STATE_REG_FULL_UPDATE_NEEDED ? "STATE_REG_FULL_UPDATE_NEEDED" :   \
+((S) == STATE_DEREG_PENDING ? "STATE_DEREG_PENDING" :           \
+((S) == STATE_BS_HOLD_OFF ? "STATE_BS_HOLD_OFF" :               \
+((S) == STATE_BS_INITIATED ? "STATE_BS_INITIATED" :             \
+((S) == STATE_BS_PENDING ? "STATE_BS_PENDING" :                 \
+((S) == STATE_BS_FINISHED ? "STATE_BS_FINISHED" :               \
+((S) == STATE_BS_FINISHING ? "STATE_BS_FINISHING" :             \
+((S) == STATE_BS_FAILING ? "STATE_BS_FAILING" :                 \
+((S) == STATE_BS_FAILED ? "STATE_BS_FAILED" :                   \
+"Unknown"))))))))))))))))
+#define STR_MEDIA_TYPE(M)                                        \
+((M) == LWM2M_CONTENT_TEXT ? "LWM2M_CONTENT_TEXT" :              \
+((M) == LWM2M_CONTENT_LINK ? "LWM2M_CONTENT_LINK" :              \
+((M) == LWM2M_CONTENT_OPAQUE ? "LWM2M_CONTENT_OPAQUE" :          \
+((M) == LWM2M_CONTENT_TLV ? "LWM2M_CONTENT_TLV" :                \
+((M) == LWM2M_CONTENT_JSON ? "LWM2M_CONTENT_JSON" :              \
+((M) == LWM2M_CONTENT_SENML_JSON ? "LWM2M_CONTENT_SENML_JSON" :  \
+"Unknown"))))))
+#define STR_STATE(S)                                \
+((S) == STATE_INITIAL ? "STATE_INITIAL" :      \
+((S) == STATE_BOOTSTRAP_REQUIRED ? "STATE_BOOTSTRAP_REQUIRED" :      \
+((S) == STATE_BOOTSTRAPPING ? "STATE_BOOTSTRAPPING" :  \
+((S) == STATE_REGISTER_REQUIRED ? "STATE_REGISTER_REQUIRED" :        \
+((S) == STATE_REGISTERING ? "STATE_REGISTERING" :      \
+((S) == STATE_READY ? "STATE_READY" :      \
+"Unknown"))))))
+#define STR_NULL2EMPTY(S) ((const char *)(S) ? (const char *)(S) : "")
+#else
+#define LOG_ARG(FMT, ...)
+#define LOG(STR)
+#define LOG_URI(URI)
+#endif
 
 #define LWM2M_DEFAULT_LIFETIME  86400
 
-#ifdef LWM2M_SUPPORT_SENML_CBOR
-#define REG_LWM2M_RESOURCE_TYPE ">;rt=\"oma.lwm2m\";ct=112,"
-#define REG_LWM2M_RESOURCE_TYPE_LEN 23
-#elif defined(LWM2M_SUPPORT_SENML_JSON)
+#ifdef LWM2M_SUPPORT_SENML_JSON
 #define REG_LWM2M_RESOURCE_TYPE     ">;rt=\"oma.lwm2m\";ct=110,"
 #define REG_LWM2M_RESOURCE_TYPE_LEN 23
 #elif defined(LWM2M_SUPPORT_JSON)
@@ -156,8 +208,6 @@
 #define REG_ATTR_CONTENT_JSON_OLD_LEN    4
 #define REG_ATTR_CONTENT_SENML_JSON      "110"
 #define REG_ATTR_CONTENT_SENML_JSON_LEN  3
-#define REG_ATTR_CONTENT_SENML_CBOR "112"
-#define REG_ATTR_CONTENT_SENML_CBOR_LEN 3
 
 #define ATTR_SERVER_ID_STR       "ep="
 #define ATTR_SERVER_ID_LEN       3
@@ -229,30 +279,42 @@ typedef struct
 } bs_data_t;
 #endif
 
-#ifdef LWM2M_SUPPORT_SENML_CBOR
-typedef enum {
-    CBOR_TYPE_UNKNOWN,
-    CBOR_TYPE_UNSIGNED_INTEGER,
-    CBOR_TYPE_NEGATIVE_INTEGER,
-    CBOR_TYPE_FLOAT,
-    CBOR_TYPE_SEMANTIC_TAG,
-    CBOR_TYPE_SIMPLE_VALUE,
-    CBOR_TYPE_BREAK,
-    CBOR_TYPE_BYTE_STRING,
-    CBOR_TYPE_TEXT_STRING,
-    CBOR_TYPE_ARRAY,
-    CBOR_TYPE_MAP,
-} cbor_type_t;
+typedef enum
+{
+    LWM2M_REQUEST_TYPE_UNKNOWN,
+    LWM2M_REQUEST_TYPE_DM,
+    LWM2M_REQUEST_TYPE_REGISTRATION,
+    LWM2M_REQUEST_TYPE_BOOTSTRAP,
+    LWM2M_REQUEST_TYPE_DELETE_ALL
+} lwm2m_request_type_t;
+
+// defined in uri.c
+lwm2m_request_type_t uri_decode(char * altPath, multi_option_t *uriPath, uint8_t code, lwm2m_uri_t *uriP);
+int uri_getNumber(uint8_t * uriString, size_t uriLength);
+
+// defined in objects.c
+uint8_t object_readData(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, int * sizeP, lwm2m_data_t ** dataP);
+uint8_t object_read(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, const uint16_t * accept, uint8_t acceptNum, lwm2m_media_type_t * formatP, uint8_t ** bufferP, size_t * lengthP);
+uint8_t object_write(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, size_t length, bool partial);
+uint8_t object_create(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, size_t length);
+uint8_t object_execute(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, uint8_t * buffer, size_t length);
+#ifdef LWM2M_RAW_BLOCK1_REQUESTS
+uint8_t object_raw_block1_write(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, size_t length, uint32_t block_num, uint8_t block_more);
+uint8_t object_raw_block1_create(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_media_type_t format, uint8_t * buffer, size_t length, uint32_t block_num, uint8_t block_more);
+uint8_t object_raw_block1_execute(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, uint8_t * buffer, size_t length, uint32_t block_num, uint8_t block_more);
 #endif
-
-#if defined(LWM2M_SUPPORT_JSON) || defined(LWM2M_SUPPORT_SENML_JSON) || defined(LWM2M_SUPPORT_SENML_CBOR)
-typedef struct {
-    uint16_t ids[4];
-    lwm2m_data_t value; /* Any buffer will be within the parsed data */
-    time_t time;
-} senml_record_t;
-
-typedef bool (*senml_convertValue)(const senml_record_t *recordP, lwm2m_data_t *targetP);
+uint8_t object_delete(lwm2m_context_t * contextP, lwm2m_uri_t * uriP);
+uint8_t object_discover(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, uint8_t ** bufferP, size_t * lengthP);
+uint8_t object_checkReadable(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_attributes_t * attrP);
+bool object_isInstanceNew(lwm2m_context_t * contextP, uint16_t objectId, uint16_t instanceId);
+int object_getRegisterPayloadBufferLength(lwm2m_context_t * contextP);
+int object_getRegisterPayload(lwm2m_context_t * contextP, uint8_t * buffer, size_t length);
+int object_getServers(lwm2m_context_t * contextP, bool checkOnly);
+uint8_t object_createInstance(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_data_t * dataP);
+uint8_t object_writeInstance(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_data_t * dataP);
+#ifndef LWM2M_VERSION_1_0
+uint8_t object_readCompositeData(lwm2m_context_t *contextP, lwm2m_uri_t *uriP, size_t numUris, int *sizeP,
+                                 lwm2m_data_t **dataP);
 #endif
 
 // defined in transaction.c
@@ -263,8 +325,40 @@ void transaction_remove(lwm2m_context_t * contextP, lwm2m_transaction_t * transa
 bool transaction_handleResponse(lwm2m_context_t * contextP, void * fromSessionH, coap_packet_t * message, coap_packet_t * response);
 void transaction_step(lwm2m_context_t * contextP, time_t currentTime, time_t * timeoutP);
 bool transaction_free_userData(lwm2m_context_t * context, lwm2m_transaction_t * transaction);
-void transaction_remove_client(lwm2m_context_t *contextP, lwm2m_client_t *clientP);
 bool transaction_set_payload(lwm2m_transaction_t *transaction, uint8_t *buffer, size_t length);
+
+// defined in management.c
+uint8_t dm_handleRequest(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, coap_packet_t * message, coap_packet_t * response);
+
+// defined in observe.c
+uint8_t observe_handleRequest(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, int size, lwm2m_data_t * dataP, coap_packet_t * message, coap_packet_t * response);
+void observe_cancel(lwm2m_context_t * contextP, uint16_t mid, void * fromSessionH);
+uint8_t observe_setParameters(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, lwm2m_attributes_t * attrP);
+void observe_step(lwm2m_context_t * contextP, time_t currentTime, time_t * timeoutP);
+void observe_clear(lwm2m_context_t * contextP, lwm2m_uri_t * uriP);
+bool observe_handleNotify(lwm2m_context_t * contextP, void * fromSessionH, coap_packet_t * message, coap_packet_t * response);
+void observe_remove(lwm2m_observation_t * observationP);
+lwm2m_observed_t * observe_findByUri(lwm2m_context_t * contextP, lwm2m_uri_t * uriP);
+
+// defined in registration.c
+uint8_t registration_handleRequest(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, void * fromSessionH, coap_packet_t * message, coap_packet_t * response);
+void registration_deregister(lwm2m_context_t * contextP, lwm2m_server_t * serverP);
+void registration_freeClient(lwm2m_client_t * clientP);
+uint8_t registration_start(lwm2m_context_t * contextP, bool restartFailed);
+void registration_step(lwm2m_context_t * contextP, time_t currentTime, time_t * timeoutP);
+lwm2m_status_t registration_getStatus(lwm2m_context_t * contextP);
+
+// defined in packet.c
+uint8_t message_send(lwm2m_context_t * contextP, coap_packet_t * message, void * sessionH);
+
+// defined in bootstrap.c
+void bootstrap_step(lwm2m_context_t * contextP, time_t currentTime, time_t* timeoutP);
+uint8_t bootstrap_handleCommand(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, coap_packet_t * message, coap_packet_t * response);
+uint8_t bootstrap_handleDeleteAll(lwm2m_context_t * context, void * fromSessionH);
+uint8_t bootstrap_handleFinish(lwm2m_context_t * context, void * fromSessionH);
+uint8_t bootstrap_handleRequest(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, void * fromSessionH, coap_packet_t * message, coap_packet_t * response);
+void bootstrap_start(lwm2m_context_t * contextP);
+lwm2m_status_t bootstrap_getStatus(lwm2m_context_t * contextP);
 
 #ifdef LWM2M_SUPPORT_TLV
 // defined in tlv.c
@@ -284,34 +378,6 @@ int senml_json_parse(const lwm2m_uri_t * uriP, const uint8_t * buffer, size_t bu
 int senml_json_serialize(const lwm2m_uri_t * uriP, int size, const lwm2m_data_t * tlvP, uint8_t ** bufferP);
 #endif
 
-#ifdef LWM2M_SUPPORT_SENML_CBOR
-// defined in cbor.c
-int cbor_get_type_and_value(const uint8_t *buffer, size_t bufferLen, cbor_type_t *type, uint64_t *value);
-int cbor_get_singular(const uint8_t *buffer, size_t bufferLen, lwm2m_data_t *dataP);
-int cbor_put_type_and_value(uint8_t *buffer, size_t bufferLen, cbor_type_t type, uint64_t val);
-int cbor_put_singular(uint8_t *buffer, size_t bufferLen, const lwm2m_data_t *dataP);
-#if defined(LWM2M_VERSION_1_0)
-int cbor_parse(const lwm2m_uri_t *uriP, const uint8_t *buffer, size_t bufferLen, lwm2m_data_t **dataP);
-int cbor_serialize(const lwm2m_uri_t *uriP, int size, const lwm2m_data_t *dataP, uint8_t **bufferP);
-#endif
-
-// defined in senml_cbor.c
-int senml_cbor_parse(const lwm2m_uri_t *uriP, const uint8_t *buffer, size_t bufferLen, lwm2m_data_t **dataP);
-int senml_cbor_serialize(const lwm2m_uri_t *uriP, int size, const lwm2m_data_t *tlvP, uint8_t **bufferP);
-#endif
-
-// defined in senml_common.c
-#if defined(LWM2M_SUPPORT_JSON) || defined(LWM2M_SUPPORT_SENML_JSON) || defined(LWM2M_SUPPORT_SENML_CBOR)
-int senml_convert_records(const lwm2m_uri_t *uriP, senml_record_t *recordArray, int numRecords,
-                          senml_convertValue convertValue, lwm2m_data_t **dataP);
-lwm2m_data_t *senml_extendData(lwm2m_data_t *parentP, lwm2m_data_type_t type, uint16_t id);
-int senml_dataStrip(int size, lwm2m_data_t *dataP, lwm2m_data_t **resultP);
-lwm2m_data_t *senml_findDataItem(lwm2m_data_t *listP, size_t count, uint16_t id);
-uri_depth_t senml_decreaseLevel(uri_depth_t level);
-int senml_findAndCheckData(const lwm2m_uri_t *uriP, uri_depth_t baseLevel, size_t size, const lwm2m_data_t *tlvP,
-                           lwm2m_data_t **targetP, uri_depth_t *targetLevelP);
-#endif
-
 // defined in json_common.c
 #if defined(LWM2M_SUPPORT_JSON) || defined(LWM2M_SUPPORT_SENML_JSON)
 size_t json_skipSpace(const uint8_t * buffer,size_t bufferLen);
@@ -329,11 +395,12 @@ uri_depth_t json_decreaseLevel(uri_depth_t level);
 int json_findAndCheckData(const lwm2m_uri_t * uriP, uri_depth_t baseLevel, size_t size, const lwm2m_data_t * tlvP, lwm2m_data_t ** targetP, uri_depth_t *targetLevelP);
 #endif
 
+// defined in discover.c
+int discover_serialize(lwm2m_context_t * contextP, lwm2m_uri_t * uriP, lwm2m_server_t * serverP, int size, lwm2m_data_t * dataP, uint8_t ** bufferP);
+
 // defined in block.c
 #ifdef LWM2M_RAW_BLOCK1_REQUESTS
-uint8_t coap_block1_handler(lwm2m_block_data_t **blockData, const char *uri, uint16_t mid, const uint8_t *buffer,
-                            size_t length, uint16_t blockSize, uint32_t blockNum, bool blockMore,
-                            uint8_t **outputBuffer, size_t *outputLength);
+uint8_t coap_block1_handler(lwm2m_block_data_t ** blockData, const char * uri, uint16_t mid, uint8_t * buffer, size_t length, uint16_t blockSize, uint32_t blockNum, bool blockMore, uint8_t ** outputBuffer, size_t * outputLength);
 #else
 uint8_t coap_block1_handler(lwm2m_block_data_t **blockData, const char *uri, const uint8_t *buffer, size_t length,
                             uint16_t blockSize, uint32_t blockNum, bool blockMore, uint8_t **outputBuffer,
@@ -346,5 +413,45 @@ uint8_t coap_block2_handler(lwm2m_block_data_t **blockData, uint16_t mid, const 
 void coap_block2_set_expected_mid(lwm2m_block_data_t *blockDataHead, uint16_t currentMid, uint16_t expectedMid);
 void free_block_data(lwm2m_block_data_t * blockData);
 void block2_delete(lwm2m_block_data_t ** pBlockDataHead, uint16_t mid);
+
+// defined in utils.c
+lwm2m_data_type_t utils_depthToDatatype(uri_depth_t depth);
+lwm2m_version_t utils_stringToVersion(uint8_t *buffer, size_t length);
+lwm2m_binding_t utils_stringToBinding(uint8_t *buffer, size_t length);
+lwm2m_media_type_t utils_convertMediaType(coap_content_type_t type);
+uint8_t utils_getResponseFormat(uint8_t accept_num,
+                                const uint16_t *accept,
+                                int numData,
+                                const lwm2m_data_t *dataP,
+                                bool singleResource,
+                                lwm2m_media_type_t *format);
+int utils_isAltPathValid(const char * altPath);
+int utils_stringCopy(char * buffer, size_t length, const char * str);
+size_t utils_intToText(int64_t data, uint8_t * string, size_t length);
+size_t utils_uintToText(uint64_t data, uint8_t * string, size_t length);
+size_t utils_floatToText(double data, uint8_t * string, size_t length, bool allowExponential);
+size_t utils_objLinkToText(uint16_t objectId,
+                           uint16_t objectInstanceId,
+                           uint8_t * string,
+                           size_t length);
+int utils_textToInt(const uint8_t * buffer, int length, int64_t * dataP);
+int utils_textToUInt(const uint8_t * buffer, int length, uint64_t * dataP);
+int utils_textToFloat(const uint8_t * buffer, int length, double * dataP, bool allowExponential);
+int utils_textToObjLink(const uint8_t * buffer,
+                        int length,
+                        uint16_t * objectId,
+                        uint16_t * objectInstanceId);
+void utils_copyValue(void * dst, const void * src, size_t len);
+size_t utils_base64GetSize(size_t dataLen);
+size_t utils_base64Encode(const uint8_t * dataP, size_t dataLen, uint8_t * bufferP, size_t bufferLen);
+size_t utils_base64GetDecodedSize(const char * dataP, size_t dataLen);
+size_t utils_base64Decode(const char * dataP, size_t dataLen, uint8_t * bufferP, size_t bufferLen);
+#ifdef LWM2M_CLIENT_MODE
+lwm2m_server_t * utils_findServer(lwm2m_context_t * contextP, void * fromSessionH);
+lwm2m_server_t * utils_findBootstrapServer(lwm2m_context_t * contextP, void * fromSessionH);
+#endif
+#if defined(LWM2M_SERVER_MODE) || defined(LWM2M_BOOTSTRAP_SERVER_MODE)
+lwm2m_client_t * utils_findClient(lwm2m_context_t * contextP, void * fromSessionH);
+#endif
 
 #endif

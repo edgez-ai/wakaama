@@ -34,7 +34,7 @@
  *      An implementation of the Constrained Application Protocol (draft 12)
  * \author
  *      Matthias Kovatsch <kovatsch@inf.ethz.ch>
- * \author
+ * \contributors
  *    David Navarro, Intel Corporation - Adapt to usage in liblwm2m
  *    Tuve Nordius, Husqvarna Group - Please refer to git log
  */
@@ -48,8 +48,7 @@
 
 #define COAP_DEFAULT_MAX_AGE                 60
 #define COAP_RESPONSE_TIMEOUT                2
-#define COAP_SEPARATE_TIMEOUT                LWM2M_COAP_SEPARATE_TIMEOUT
-#define COAP_MAX_RETRANSMIT                  LWM2M_COAP_DEFAULT_MAX_RETRANSMIT
+#define COAP_MAX_RETRANSMIT                  4
 #define COAP_ACK_RANDOM_FACTOR               1.5
 #define COAP_MAX_LATENCY                     100
 #define COAP_PROCESSING_DELAY                COAP_RESPONSE_TIMEOUT

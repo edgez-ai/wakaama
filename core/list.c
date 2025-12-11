@@ -57,15 +57,6 @@ lwm2m_list_t * lwm2m_list_find(lwm2m_list_t * head,
     return NULL;
 }
 
-size_t lwm2m_list_count(const lwm2m_list_t *head) {
-    size_t count = 0;
-    while (NULL != head) {
-        ++count;
-        head = head->next;
-    }
-
-    return count;
-}
 
 lwm2m_list_t * lwm2m_list_remove(lwm2m_list_t * head,
                                  uint16_t id,

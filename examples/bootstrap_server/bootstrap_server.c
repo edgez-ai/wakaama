@@ -35,9 +35,9 @@
 #include <signal.h>
 #include <inttypes.h>
 
-#include "bootstrap_info.h"
 #include "commandline.h"
-#include "udp/connection.h"
+#include "connection.h"
+#include "bootstrap_info.h"
 
 #define CMD_STATUS_NEW  0
 #define CMD_STATUS_SENT 1
@@ -58,11 +58,13 @@ typedef struct _endpoint_
 typedef struct
 {
     int               sock;
-    lwm2m_connection_t *connList;
+    connection_t *    connList;
     bs_info_t *       bsInfo;
     endpoint_t *      endpointList;
     int               addressFamily;
 } internal_data_t;
+
+#define MAX_PACKET_SIZE 2048
 
 static int g_quit = 0;
 
@@ -80,7 +82,7 @@ void handle_sigint(int signum)
 
 void print_usage(const char *filename, const char *port) {
     fprintf(stdout, "Usage: bootstap_server [OPTION]\r\n");
-    fprintf(stderr, "Launch a LwM2M Bootstrap Server.\r\n\n");
+    fprintf(stderr, "Launch a LWM2M Bootstrap Server.\r\n\n");
     fprintf(stdout, "Options:\r\n");
     fprintf(stdout, "  -f FILE\tSpecify BootStrap Information file. Default: ./%s\r\n", filename);
     fprintf(stdout, "  -l PORT\tSet the local UDP port of the Bootstrap Server. Default: %s\r\n", port);
@@ -486,7 +488,7 @@ static void prv_bootstrap_client(lwm2m_context_t *lwm2mH,
     char * end = NULL;
     char * host;
     char * port;
-    lwm2m_connection_t *newConnP = NULL;
+    connection_t * newConnP = NULL;
 
     uri = buffer;
     end = get_end_of_arg(buffer);
@@ -524,8 +526,8 @@ static void prv_bootstrap_client(lwm2m_context_t *lwm2mH,
     *port = 0;
     port++;
 
-    fprintf(stderr, "Trying to connect to LwM2M CLient at %s:%s\r\n", host, port);
-    newConnP = lwm2m_connection_create(dataP->connList, dataP->sock, host, port, dataP->addressFamily);
+    fprintf(stderr, "Trying to connect to LWM2M CLient at %s:%s\r\n", host, port);
+    newConnP = connection_create(dataP->connList, dataP->sock, host, port, dataP->addressFamily);
     if (newConnP == NULL) {
         fprintf(stderr, "Connection creation failed.\r\n");
         return;
@@ -533,7 +535,7 @@ static void prv_bootstrap_client(lwm2m_context_t *lwm2mH,
     dataP->connList = newConnP;
 
     // simulate a client bootstrap request.
-    // Only LwM2M 1.0 clients support this method of bootstrap. For them, TLV
+    // Only LWM2M 1.0 clients support this method of bootstrap. For them, TLV
     // support is mandatory.
     if (COAP_204_CHANGED == prv_bootstrap_callback(lwm2mH, newConnP, COAP_NO_ERROR, NULL, name, LWM2M_CONTENT_TLV, NULL, 0, user_data))
     {
@@ -629,7 +631,7 @@ int main(int argc, char *argv[])
         opt += 1;
     }
 
-    data.sock = lwm2m_create_socket(port, data.addressFamily);
+    data.sock = create_socket(port, data.addressFamily);
     if (data.sock < 0)
     {
         fprintf(stderr, "Error opening socket: %d\r\n", errno);
@@ -694,7 +696,7 @@ int main(int argc, char *argv[])
         }
         else if (result >= 0)
         {
-            uint8_t buffer[LWM2M_COAP_MAX_MESSAGE_SIZE];
+            uint8_t buffer[MAX_PACKET_SIZE];
             ssize_t numBytes;
 
             // Packet received
@@ -704,20 +706,23 @@ int main(int argc, char *argv[])
                 socklen_t addrLen;
 
                 addrLen = sizeof(addr);
-                numBytes =
-                    recvfrom(data.sock, buffer, LWM2M_COAP_MAX_MESSAGE_SIZE, 0, (struct sockaddr *)&addr, &addrLen);
+                numBytes = recvfrom(data.sock, buffer, MAX_PACKET_SIZE, 0, (struct sockaddr *)&addr, &addrLen);
 
                 if (numBytes == -1)
                 {
                     fprintf(stderr, "Error in recvfrom(): %d\r\n", errno);
-                } else if (numBytes >= LWM2M_COAP_MAX_MESSAGE_SIZE) {
-                    fprintf(stderr, "Received packet >= LWM2M_COAP_MAX_MESSAGE_SIZE\r\n");
-                } else {
+                }
+                else if (numBytes >= MAX_PACKET_SIZE) 
+                {
+                    fprintf(stderr, "Received packet >= MAX_PACKET_SIZE\r\n");
+                } 
+                else
+                {
                     char s[INET6_ADDRSTRLEN];
                     in_port_t rec_port;
-                    lwm2m_connection_t *connP;
+                    connection_t * connP;
 
-                    s[0] = 0;
+					s[0] = 0;
                     if (AF_INET == addr.ss_family)
                     {
                         struct sockaddr_in *saddr = (struct sockaddr_in *)&addr;
@@ -735,11 +740,10 @@ int main(int argc, char *argv[])
 
                     output_buffer(stderr, buffer, (size_t)numBytes, 0);
 
-                    connP = lwm2m_connection_find(data.connList, &addr, addrLen);
+                    connP = connection_find(data.connList, &addr, addrLen);
                     if (connP == NULL)
                     {
-                        connP =
-                            lwm2m_connection_new_incoming(data.connList, data.sock, (struct sockaddr *)&addr, addrLen);
+                        connP = connection_new_incoming(data.connList, data.sock, (struct sockaddr *)&addr, addrLen);
                         if (connP != NULL)
                         {
                             data.connList = connP;
@@ -754,7 +758,7 @@ int main(int argc, char *argv[])
             // command line input
             else if (FD_ISSET(STDIN_FILENO, &readfds))
             {
-                numBytes = read(STDIN_FILENO, buffer, LWM2M_COAP_MAX_MESSAGE_SIZE - 1);
+                numBytes = read(STDIN_FILENO, buffer, MAX_PACKET_SIZE - 1);
 
                 if (numBytes > 1)
                 {
@@ -821,7 +825,7 @@ int main(int argc, char *argv[])
         prv_endpoint_free(endP);
     }
     close(data.sock);
-    lwm2m_connection_free(data.connList);
+    connection_free(data.connList);
 
     return 0;
 }

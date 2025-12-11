@@ -56,13 +56,16 @@
 #include <string.h>
 
 #include <stdio.h>
+#ifdef ESP_PLATFORM
+#include "esp_system.h"
+#endif
 
 
 lwm2m_context_t * lwm2m_init(void * userData)
 {
     lwm2m_context_t * contextP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     contextP = (lwm2m_context_t *)lwm2m_malloc(sizeof(lwm2m_context_t));
     if (NULL != contextP)
     {
@@ -80,7 +83,7 @@ void lwm2m_deregister(lwm2m_context_t * context)
 {
     lwm2m_server_t * server = context->serverList;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     while (NULL != server)
     {
         registration_deregister(context, server);
@@ -107,7 +110,7 @@ static void prv_deleteServer(lwm2m_server_t * serverP, void *userData)
         serverP->blockData = serverP->blockData->next;
         free_block_data(targetP);
     }
-
+    
     lwm2m_free(serverP);
 }
 
@@ -124,21 +127,12 @@ static void prv_deleteServerList(lwm2m_context_t * context)
 
 static void prv_deleteBootstrapServer(lwm2m_server_t * serverP, void *userData)
 {
-    LOG_DBG("Entering");
+    // TODO should we free location as in prv_deleteServer ?
     // TODO should we parse transaction and observation to remove the ones related to this server ?
-    if (serverP->sessionH != NULL) {
-        lwm2m_close_connection(serverP->sessionH, userData);
+    if (serverP->sessionH != NULL)
+    {
+         lwm2m_close_connection(serverP->sessionH, userData);
     }
-
-    lwm2m_free(serverP->location);
-
-    while (serverP->blockData != NULL) {
-        lwm2m_block_data_t *targetP;
-        targetP = serverP->blockData;
-        serverP->blockData = serverP->blockData->next;
-        free_block_data(targetP);
-    }
-
     lwm2m_free(serverP);
 }
 
@@ -193,7 +187,7 @@ void lwm2m_close(lwm2m_context_t * contextP)
 {
 #ifdef LWM2M_CLIENT_MODE
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     lwm2m_deregister(contextP);
     prv_deleteServerList(contextP);
     prv_deleteBootstrapServerList(contextP);
@@ -218,7 +212,7 @@ void lwm2m_close(lwm2m_context_t * contextP)
         clientP = contextP->clientList;
         contextP->clientList = contextP->clientList->next;
 
-        registration_freeClient(contextP, clientP);
+        registration_freeClient(clientP);
     }
 #endif
 
@@ -231,7 +225,7 @@ static int prv_refreshServerList(lwm2m_context_t * contextP)
 {
     lwm2m_server_t * targetP;
     lwm2m_server_t * nextP;
-
+    LOG("refresh server list");
     // Remove all servers marked as dirty
     targetP = contextP->bootstrapServerList;
     contextP->bootstrapServerList = NULL;
@@ -281,8 +275,11 @@ int lwm2m_configure(lwm2m_context_t * contextP,
     int i;
     uint8_t found;
 
-    LOG_ARG_DBG("endpointName: \"%s\", msisdn: \"%s\", altPath: \"%s\", numObject: %d", STR_NULL2EMPTY(endpointName),
-                STR_NULL2EMPTY(msisdn), STR_NULL2EMPTY(altPath), numObject);
+    LOG_ARG("endpointName: \"%s\", msisdn: \"%s\", altPath: \"%s\", numObject: %d",
+            STR_NULL2EMPTY(endpointName),
+            STR_NULL2EMPTY(msisdn),
+            STR_NULL2EMPTY(altPath),
+            numObject);
     // This API can be called only once for now
     if (contextP->endpointName != NULL || contextP->objectList != NULL) return COAP_400_BAD_REQUEST;
 
@@ -346,7 +343,7 @@ int lwm2m_add_object(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("ID: %d", objectP->objID);
+    LOG_ARG("ID: %d", objectP->objID);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, objectP->objID);
     if (targetP != NULL) return COAP_406_NOT_ACCEPTABLE;
     objectP->next = NULL;
@@ -366,7 +363,7 @@ int lwm2m_remove_object(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("ID: %d", id);
+    LOG_ARG("ID: %d", id);
     contextP->objectList = (lwm2m_object_t *)LWM2M_LIST_RM(contextP->objectList, id, &targetP);
 
     if (targetP == NULL) return COAP_404_NOT_FOUND;
@@ -387,25 +384,30 @@ int lwm2m_step(lwm2m_context_t * contextP,
 {
     time_t tv_sec;
 
-    LOG_ARG_DBG("timeoutP: %d", (int)*timeoutP);
+    LOG_ARG("timeoutP: %d", (int) *timeoutP);
     tv_sec = lwm2m_gettime();
     if (tv_sec < 0) return COAP_500_INTERNAL_SERVER_ERROR;
 
 #ifdef LWM2M_CLIENT_MODE
-    LOG_ARG_DBG("State: %s", STR_STATE(contextP->state));
+    LOG_ARG("State: %s", STR_STATE(contextP->state));
     // state can also be modified in bootstrap_handleCommand().
 
 next_step:
     switch (contextP->state)
     {
     case STATE_INITIAL:
-        if (0 != prv_refreshServerList(contextP)) return COAP_503_SERVICE_UNAVAILABLE;
+        if (0 != prv_refreshServerList(contextP)) {
+            LOG("503");
+            return COAP_503_SERVICE_UNAVAILABLE;
+        }
         if (contextP->serverList != NULL)
         {
+            LOG("STATE_REGISTER_REQUIRED");
             contextP->state = STATE_REGISTER_REQUIRED;
         }
         else
         {
+            LOG("STATE_BOOTSTRAP_REQUIRED");
             // Bootstrapping
             contextP->state = STATE_BOOTSTRAP_REQUIRED;
         }
@@ -435,6 +437,13 @@ next_step:
             goto next_step;
 
         case STATE_BS_FAILED:
+            LOG_ARG("BS failed, timeoutP: %d", (int)*timeoutP);
+            if (*timeoutP > 300) {
+                LOG_ARG("timeoutP exceeded 300 (%d), retrying bootstrap instead of restarting...", (int)*timeoutP);
+                // esp_restart(); // DISABLED: Restart is too aggressive
+                contextP->state = STATE_BOOTSTRAP_REQUIRED; // Retry bootstrap
+                *timeoutP = 0; // Reset timeout
+            }
             return COAP_503_SERVICE_UNAVAILABLE;
 
         default:
@@ -462,7 +471,9 @@ next_step:
 
         case STATE_REG_FAILED:
             // TODO avoid infinite loop by checking the bootstrap info is different
-            contextP->state = STATE_BOOTSTRAP_REQUIRED;
+            LOG("Registration failed, retrying instead of restarting...");
+            // esp_restart(); // DISABLED: Restart is too aggressive, just retry registration
+            contextP->state = STATE_REGISTER_REQUIRED; // Retry registration instead of bootstrap
             goto next_step;
 
         case STATE_REG_PENDING:
@@ -477,7 +488,9 @@ next_step:
         if (registration_getStatus(contextP) == STATE_REG_FAILED)
         {
             // TODO avoid infinite loop by checking the bootstrap info is different
-            contextP->state = STATE_BOOTSTRAP_REQUIRED;
+            LOG("Registration failed from READY state, retrying instead of restarting...");
+            // esp_restart(); // DISABLED: Restart is too aggressive, just retry registration
+            contextP->state = STATE_REGISTER_REQUIRED; // Retry registration instead of bootstrap
             goto next_step;
             break;
         }
@@ -494,9 +507,9 @@ next_step:
     registration_step(contextP, tv_sec, timeoutP);
     transaction_step(contextP, tv_sec, timeoutP);
 
-    LOG_ARG_DBG("Final timeoutP: %d", (int)*timeoutP);
+    LOG_ARG("Final timeoutP: %d", (int) *timeoutP);
 #ifdef LWM2M_CLIENT_MODE
-    LOG_ARG_DBG("Final state: %s", STR_STATE(contextP->state));
+    LOG_ARG("Final state: %s", STR_STATE(contextP->state));
 #endif
     return 0;
 }

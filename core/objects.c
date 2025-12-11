@@ -117,7 +117,7 @@ uint8_t object_checkReadable(lwm2m_context_t * contextP,
     lwm2m_data_t * valueP = NULL;
     int size;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->readFunc) return COAP_405_METHOD_NOT_ALLOWED;
@@ -178,7 +178,7 @@ uint8_t object_readData(lwm2m_context_t * contextP,
     uint8_t result;
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->readFunc) return COAP_405_METHOD_NOT_ALLOWED;
@@ -258,7 +258,7 @@ uint8_t object_readData(lwm2m_context_t * contextP,
         *dataP = NULL;
     }
 
-    LOG_ARG_DBG("result: %u.%02u, size: %d", (result & 0xFF) >> 5, (result & 0x1F), *sizeP);
+    LOG_ARG("result: %u.%02u, size: %d", (result & 0xFF) >> 5, (result & 0x1F), *sizeP);
     return result;
 }
 
@@ -275,7 +275,7 @@ uint8_t object_read(lwm2m_context_t * contextP,
     int size = 0;
     int res;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     result = object_readData(contextP, uriP, &size, &dataP);
 
     if (result == COAP_205_CONTENT)
@@ -304,7 +304,7 @@ uint8_t object_read(lwm2m_context_t * contextP,
     }
     lwm2m_data_free(size, dataP);
 
-    LOG_ARG_DBG("result: %u.%02u, length: %zd", (result & 0xFF) >> 5, (result & 0x1F), *lengthP);
+    LOG_ARG("result: %u.%02u, length: %d", (result & 0xFF) >> 5, (result & 0x1F), *lengthP);
 
     return result;
 }
@@ -372,7 +372,7 @@ uint8_t object_write(lwm2m_context_t * contextP,
     lwm2m_data_t * dataP = NULL;
     int size = 0;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     if (!LWM2M_URI_IS_SET_OBJECT(uriP)) return COAP_400_BAD_REQUEST;
     if (!LWM2M_URI_IS_SET_INSTANCE(uriP)) return COAP_400_BAD_REQUEST;
 
@@ -431,7 +431,7 @@ uint8_t object_write(lwm2m_context_t * contextP,
         lwm2m_data_free(size, dataP);
     }
 
-    LOG_ARG_DBG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
+    LOG_ARG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
 
     return result;
 }
@@ -443,7 +443,7 @@ uint8_t object_execute(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->executeFunc) return COAP_405_METHOD_NOT_ALLOWED;
@@ -463,7 +463,7 @@ uint8_t object_create(lwm2m_context_t * contextP,
     int size = 0;
     uint8_t result;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
 
     if (length == 0 || buffer == NULL)
     {
@@ -511,7 +511,7 @@ uint8_t object_create(lwm2m_context_t * contextP,
 exit:
     lwm2m_data_free(size, dataP);
 
-    LOG_ARG_DBG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
+    LOG_ARG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
 
     return result;
 }
@@ -526,9 +526,11 @@ uint8_t object_raw_block1_write(lwm2m_context_t * contextP,
                             uint8_t block_more)
 {
     uint8_t result = NO_ERROR;
-    lwm2m_object_t *targetP;
+    lwm2m_object_t * targetP;
+    lwm2m_data_t * dataP = NULL;
+    int size = 0;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->rawBlock1WriteFunc) return COAP_405_METHOD_NOT_ALLOWED;
@@ -542,7 +544,7 @@ uint8_t object_raw_block1_write(lwm2m_context_t * contextP,
         result = COAP_231_CONTINUE;
     }
 
-    LOG_ARG_DBG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
+    LOG_ARG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
 
     return result;
 }
@@ -556,8 +558,8 @@ uint8_t object_raw_block1_execute(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
     uint8_t result;
-
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->rawBlock1ExecuteFunc) return COAP_405_METHOD_NOT_ALLOWED;
@@ -584,7 +586,7 @@ uint8_t object_raw_block1_create(lwm2m_context_t * contextP,
     lwm2m_object_t * targetP;
     uint8_t result;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
 
     if (length == 0 || buffer == NULL)
     {
@@ -612,12 +614,12 @@ uint8_t object_delete(lwm2m_context_t * contextP,
     lwm2m_object_t * objectP;
     uint8_t result;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     objectP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == objectP) return COAP_404_NOT_FOUND;
     if (NULL == objectP->deleteFunc) return COAP_405_METHOD_NOT_ALLOWED;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
 
     if (LWM2M_URI_IS_SET_INSTANCE(uriP))
     {
@@ -649,7 +651,7 @@ uint8_t object_delete(lwm2m_context_t * contextP,
         }
     }
 
-    LOG_ARG_DBG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
+    LOG_ARG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
 
     return result;
 }
@@ -665,7 +667,7 @@ uint8_t object_discover(lwm2m_context_t * contextP,
     lwm2m_data_t * dataP = NULL;
     int size = 0;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
     if (NULL == targetP->discoverFunc) return COAP_501_NOT_IMPLEMENTED;
@@ -728,7 +730,7 @@ uint8_t object_discover(lwm2m_context_t * contextP,
     }
     lwm2m_data_free(size, dataP);
 
-    LOG_ARG_DBG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
+    LOG_ARG("result: %u.%02u", (result & 0xFF) >> 5, (result & 0x1F));
 
     return result;
 }
@@ -739,7 +741,7 @@ bool object_isInstanceNew(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, objectId);
     if (targetP != NULL)
     {
@@ -783,7 +785,7 @@ int object_getRegisterPayloadBufferLength(lwm2m_context_t * contextP)
     lwm2m_object_t * objectP;
     uint8_t buffer[REG_OBJECT_MIN_LEN + 5];
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     index = strlen(REG_START);
 
     if ((contextP->altPath != NULL)
@@ -881,7 +883,7 @@ int object_getRegisterPayload(lwm2m_context_t * contextP,
     int result;
     lwm2m_object_t * objectP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     // index can not be greater than bufferLen
     index = 0;
 
@@ -1033,9 +1035,9 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
     lwm2m_object_t * objectP;
     lwm2m_object_t * securityObjP = NULL;
     lwm2m_object_t * serverObjP = NULL;
-    lwm2m_list_t *securityInstP; // instanceID of the server in the LwM2M Security Object
+    lwm2m_list_t * securityInstP;   // instanceID of the server in the LWM2M Security Object
 
-    LOG_DBG("Entering");
+    LOG("Entering");
 
     for (objectP = contextP->objectList; objectP != NULL; objectP = objectP->next)
     {
@@ -1049,7 +1051,10 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
         }
     }
 
-    if (NULL == securityObjP) return -1;
+    if (NULL == securityObjP) {
+        LOG("object_getServers: securityObjP is NULL, returning -1");
+        return -1;
+    }
 
     securityInstP = securityObjP->instanceList;
     while (securityInstP != NULL)
@@ -1067,17 +1072,22 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
 
             size = 1;
             dataP = lwm2m_data_new(size);
-            if (dataP == NULL) return -1;
+            if (dataP == NULL) {
+                LOG("object_getServers: dataP is NULL (bootstrap check), returning -1");
+                return -1;
+            }
             dataP[0].id = LWM2M_SECURITY_BOOTSTRAP_ID;
 
             if (securityObjP->readFunc(contextP, securityInstP->id, &size, &dataP, securityObjP) != COAP_205_CONTENT)
             {
+                LOG("object_getServers: readFunc failed (bootstrap check), returning -1");
                 lwm2m_data_free(size, dataP);
                 return -1;
             }
 
             targetP = (lwm2m_server_t *)lwm2m_malloc(sizeof(lwm2m_server_t));
             if (targetP == NULL) {
+                LOG("object_getServers: lwm2m_malloc failed (bootstrap), returning -1");
                 lwm2m_data_free(size, dataP);
                 return -1;
             }
@@ -1086,6 +1096,7 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
 
             if (0 == lwm2m_data_decode_bool(dataP, &isBootstrap))
             {
+                LOG("object_getServers: decode_bool failed (bootstrap), returning -1");
                 lwm2m_free(targetP);
                 lwm2m_data_free(size, dataP);
                 return -1;
@@ -1103,12 +1114,14 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
                 dataP = lwm2m_data_new(size);
                 if (dataP == NULL)
                 {
+                    LOG("object_getServers: dataP is NULL (hold off), returning -1");
                     lwm2m_free(targetP);
                     return -1;
                 }
                 dataP[0].id = LWM2M_SECURITY_HOLD_OFF_ID;
                 if (securityObjP->readFunc(contextP, securityInstP->id, &size, &dataP, securityObjP) != COAP_205_CONTENT)
                 {
+                    LOG("object_getServers: readFunc failed (hold off), returning -1");
                     lwm2m_free(targetP);
                     lwm2m_data_free(size, dataP);
                     return -1;
@@ -1116,6 +1129,7 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
                 if (0 == lwm2m_data_decode_int(dataP, &value)
                  || value < 0 || value > 0xFFFFFFFF)             // This is an implementation limit
                 {
+                    LOG("object_getServers: decode_int failed or value out of range (hold off), returning -1");
                     lwm2m_free(targetP);
                     lwm2m_data_free(size, dataP);
                     return -1;
@@ -1134,19 +1148,21 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
             }
             else
             {
-                lwm2m_list_t *serverInstP; // instanceID of the server in the LwM2M Server Object
+                lwm2m_list_t * serverInstP;     // instanceID of the server in the LWM2M Server Object
 
                 lwm2m_data_free(size, dataP);
                 size = 1;
                 dataP = lwm2m_data_new(size);
                 if (dataP == NULL)
                 {
+                    LOG("object_getServers: dataP is NULL (server), returning -1");
                     lwm2m_free(targetP);
                     return -1;
                 }
                 dataP[0].id = LWM2M_SECURITY_SHORT_SERVER_ID;
                 if (securityObjP->readFunc(contextP, securityInstP->id, &size, &dataP, securityObjP) != COAP_205_CONTENT)
                 {
+                    LOG("object_getServers: readFunc failed (server), returning -1");
                     lwm2m_free(targetP);
                     lwm2m_data_free(size, dataP);
                     return -1;
@@ -1154,6 +1170,7 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
                 if (0 == lwm2m_data_decode_int(dataP, &value)
                  || value < 1 || value > 0xFFFF)                // 0 is forbidden as a Short Server ID
                 {
+                    LOG("object_getServers: decode_int failed or value out of range (server short ID), returning -1");
                     lwm2m_free(targetP);
                     lwm2m_data_free(size, dataP);
                     return -1;
@@ -1163,6 +1180,7 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
                 serverInstP = prv_findServerInstance(contextP, serverObjP, targetP->shortID);
                 if (serverInstP == NULL)
                 {
+                    LOG("object_getServers: serverInstP is NULL, returning -1");
                     lwm2m_free(targetP);
                 }
                 else
@@ -1172,6 +1190,7 @@ int object_getServers(lwm2m_context_t * contextP, bool checkOnly)
 #endif
                     if (0 != prv_getMandatoryInfo(contextP, serverObjP, serverInstP->id, targetP))
                     {
+                        LOG("object_getServers: prv_getMandatoryInfo failed, returning -1");
                         lwm2m_free(targetP);
                         lwm2m_data_free(size, dataP);
                         return -1;
@@ -1201,7 +1220,7 @@ uint8_t object_createInstance(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
 
@@ -1219,7 +1238,7 @@ uint8_t object_writeInstance(lwm2m_context_t * contextP,
 {
     lwm2m_object_t * targetP;
 
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_URI(uriP);
     targetP = (lwm2m_object_t *)LWM2M_LIST_FIND(contextP->objectList, uriP->objectId);
     if (NULL == targetP) return COAP_404_NOT_FOUND;
 

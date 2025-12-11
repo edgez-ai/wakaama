@@ -100,7 +100,7 @@ lwm2m_request_type_t uri_decode(char * altPath,
     int readNum;
     lwm2m_request_type_t requestType = LWM2M_REQUEST_TYPE_DM;
 
-    LOG_ARG_DBG("altPath: \"%s\"", STR_NULL2EMPTY(altPath));
+    LOG_ARG("altPath: \"%s\"", STR_NULL2EMPTY(altPath));
 
     LWM2M_URI_RESET(uriP);
 
@@ -120,13 +120,8 @@ lwm2m_request_type_t uri_decode(char * altPath,
         uriPath = uriPath->next;
         if (uriPath != NULL) goto error;
         return LWM2M_REQUEST_TYPE_BOOTSTRAP;
-    } else if (NULL != uriPath && URI_SEND_SEGMENT_LEN == uriPath->len &&
-               0 == strncmp(URI_SEND_SEGMENT, (char *)uriPath->data, uriPath->len)) {
-        uriPath = uriPath->next;
-        if (uriPath != NULL)
-            goto error;
-        return LWM2M_REQUEST_TYPE_SEND;
     }
+
     if (requestType != LWM2M_REQUEST_TYPE_REGISTRATION)
     {
         // Read altPath if any
@@ -212,12 +207,12 @@ lwm2m_request_type_t uri_decode(char * altPath,
     // must be the last segment
     if (NULL == uriPath->next)
     {
-        LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+        LOG_URI(uriP);
         return requestType;
     }
 
 error:
-    LOG_DBG("Exiting on error");
+    LOG("Exiting on error");
     LWM2M_URI_RESET(uriP);
     return LWM2M_REQUEST_TYPE_UNKNOWN;
 }
@@ -229,7 +224,7 @@ int lwm2m_stringToUri(const char * buffer,
     size_t head;
     int readNum;
 
-    LOG_ARG_DBG("buffer_len: %zu, buffer: \"%.*s\"", buffer_len, (int)buffer_len, STR_NULL2EMPTY(buffer));
+    LOG_ARG("buffer_len: %u, buffer: \"%.*s\"", buffer_len, buffer_len, STR_NULL2EMPTY(buffer));
 
     if (uriP == NULL) return 0;
 
@@ -285,8 +280,8 @@ int lwm2m_stringToUri(const char * buffer,
         }
     }
 
-    LOG_ARG_DBG("Parsed characters: %zu", head);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("Parsed characters: %u", head);
+    LOG_URI(uriP);
 
     return head;
 }
@@ -298,6 +293,9 @@ int lwm2m_uriToString(const lwm2m_uri_t * uriP,
 {
     size_t head = 0;
     uri_depth_t depth = URI_DEPTH_NONE;
+
+    LOG_ARG("bufferLen: %u", bufferLen);
+    LOG_URI(uriP);
 
     if (uriP && LWM2M_URI_IS_SET_OBJECT(uriP))
     {
@@ -353,19 +351,7 @@ int lwm2m_uriToString(const lwm2m_uri_t * uriP,
 
     if (depthP) *depthP = depth;
 
+    LOG_ARG("length: %u, buffer: \"%.*s\"", head, head, buffer);
+
     return head;
-}
-
-char *uri_logging_to_string(const lwm2m_uri_t *uri) {
-    static char uri_string[URI_MAX_STRING_LEN + 1];
-    memset(uri_string, '\0', sizeof(uri_string));
-    if (uri != NULL) {
-        uri_depth_t depth;
-        lwm2m_uriToString(uri, (uint8_t *)uri_string, URI_MAX_STRING_LEN, &depth);
-    }
-
-    /* Better to be safe than sorry */
-    uri_string[URI_MAX_STRING_LEN] = '\0';
-
-    return uri_string;
 }

@@ -122,24 +122,25 @@ static int prv_checkFinished(lwm2m_transaction_t * transacP,
     uint8_t* token;
     coap_packet_t * transactionMessage = (coap_packet_t *) transacP->message;
 
-    if (transactionMessage->mid == receivedMessage->mid) {
-        if (COAP_DELETE < transactionMessage->code) {
-            // response
-            return transacP->ack_received ? 1 : 0;
-        }
-        if (!IS_OPTION(transactionMessage, COAP_OPTION_TOKEN)) {
-            // request without token
-            return transacP->ack_received ? 1 : 0;
-        }
+    if (transactionMessage->mid != receivedMessage->mid) {
+        return false;
     }
 
-    if (COAP_DELETE >= transactionMessage->code && IS_OPTION(transactionMessage, COAP_OPTION_TOKEN)) {
-        // request with token
-        len = coap_get_header_token(receivedMessage, &token);
-        if (transactionMessage->token_len == len) {
-            if (memcmp(transactionMessage->token, token, len) == 0)
-                return 1;
-        }
+    if (COAP_DELETE < transactionMessage->code)
+    {
+        // response
+        return transacP->ack_received ? 1 : 0;
+    }
+    if (!IS_OPTION(transactionMessage, COAP_OPTION_TOKEN))
+    {
+        // request without token
+        return transacP->ack_received ? 1 : 0;
+    }
+
+    len = coap_get_header_token(receivedMessage, &token);
+    if (transactionMessage->token_len == len)
+    {
+        if (memcmp(transactionMessage->token, token, len)==0) return 1;
     }
 
     return 0;
@@ -156,8 +157,9 @@ lwm2m_transaction_t * transaction_new(void * sessionH,
     lwm2m_transaction_t * transacP;
     int result;
 
-    LOG_ARG_DBG("method: %d, altPath: \"%s\", mID: %d, token_len: %d", method, STR_NULL2EMPTY(altPath), mID, token_len);
-    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    LOG_ARG("method: %d, altPath: \"%s\", mID: %d, token_len: %d",
+            method, STR_NULL2EMPTY(altPath), mID, token_len);
+    LOG_URI(uriP);
 
     // no transactions without peer
     if (NULL == sessionH) return NULL;
@@ -237,11 +239,11 @@ lwm2m_transaction_t * transaction_new(void * sessionH,
         }
     }
 
-    LOG_ARG_DBG("Exiting on success. new transac=%p", (void *)transacP);
+    LOG_ARG("Exiting on success. new transac=%p", transacP);
     return transacP;
 
 error:
-    LOG_DBG("Exiting on failure");
+    LOG("Exiting on failure");
     if(transacP->message)
     {
         coap_free_header(transacP->message);
@@ -253,7 +255,7 @@ error:
 
 void transaction_free(lwm2m_transaction_t * transacP)
 {
-    LOG_ARG_DBG("Entering. transaction=%p", (void *)transacP);
+    LOG_ARG("Entering. transaction=%p", transacP);
     if (transacP->message)
     {
        coap_free_header(transacP->message);
@@ -277,7 +279,7 @@ void transaction_free(lwm2m_transaction_t * transacP)
 void transaction_remove(lwm2m_context_t * contextP,
                         lwm2m_transaction_t * transacP)
 {
-    LOG_ARG_DBG("Entering. transaction=%p", (void *)transacP);
+    LOG_ARG("Entering. transaction=%p", transacP);
     contextP->transactionList = (lwm2m_transaction_t *) LWM2M_LIST_RM(contextP->transactionList, transacP->mID, NULL);
     transaction_free(transacP);
 }
@@ -291,7 +293,7 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
     bool reset = false;
     lwm2m_transaction_t * transacP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     transacP = contextP->transactionList;
 
     while (NULL != transacP)
@@ -346,10 +348,12 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
                 {
                     transacP->retrans_time = tv_sec;
                 }
-                if (message->code == COAP_EMPTY_MESSAGE_CODE) {
-                    // if empty ack received, set timeout for separate response
-                    transacP->retrans_time += COAP_SEPARATE_TIMEOUT;
-                } else {
+                if (transacP->response_timeout)
+                {
+                    transacP->retrans_time += transacP->response_timeout;
+                }
+                else
+                {
                     transacP->retrans_time += COAP_RESPONSE_TIMEOUT * transacP->retrans_counter;
                 }
                 return true;
@@ -366,7 +370,7 @@ int transaction_send(lwm2m_context_t * contextP,
 {
     bool maxRetriesReached = false;
 
-    LOG_ARG_DBG("Entering: transaction=%p", (void *)transacP);
+    LOG_ARG("Entering: transaction=%p", transacP);
     if (transacP->buffer == NULL)
     {
         transacP->buffer_len = coap_serialize_get_size(transacP->message);
@@ -429,7 +433,6 @@ int transaction_send(lwm2m_context_t * contextP,
     }
     else
     {
-        LOG_WARN("ACK received but separate response timed out!");
         goto error;
     }
     if (maxRetriesReached)
@@ -441,7 +444,7 @@ int transaction_send(lwm2m_context_t * contextP,
 error:
     if (transacP->callback)
     {
-        LOG_ARG_DBG("transaction %p expired..calling callback", (void *)transacP);
+        LOG_ARG("transaction %p expired..calling callback", transacP);
         transacP->callback(contextP, transacP, NULL);
     }
     transaction_remove(contextP, transacP);
@@ -454,7 +457,7 @@ void transaction_step(lwm2m_context_t * contextP,
 {
     lwm2m_transaction_t * transacP;
 
-    LOG_DBG("Entering");
+    LOG("Entering");
     transacP = contextP->transactionList;
     while (transacP != NULL)
     {
@@ -524,23 +527,4 @@ bool transaction_free_userData(lwm2m_context_t * context, lwm2m_transaction_t * 
     lwm2m_free(transaction->userData);
     transaction->userData = NULL;
     return true;
-}
-
-/*
- * Remove transactions from a specific client.
- */
-void transaction_remove_client(lwm2m_context_t *contextP, lwm2m_client_t *clientP) {
-    lwm2m_transaction_t *transacP;
-
-    LOG_DBG("Entering");
-    transacP = contextP->transactionList;
-    while (transacP != NULL) {
-        lwm2m_transaction_t *nextP = transacP->next;
-
-        if (lwm2m_session_is_equal(transacP->peerH, clientP->sessionH, contextP->userData)) {
-            LOG_DBG("Found session to remove");
-            transaction_remove(contextP, transacP);
-        }
-        transacP = nextP;
-    }
 }
