@@ -581,7 +581,9 @@ lwm2m_object_t * get_security_object(int serverId,
         targetP->publicIdLen = 0;
         targetP->secretKey = NULL;
         targetP->secretKeyLen = 0;
-        if (bsPskId != NULL || psk != NULL)
+
+        /* Only enable PSK when we actually have a key; otherwise keep NO-SECURE. */
+        if (psk != NULL && pskLen > 0)
         {
             targetP->securityMode = LWM2M_SECURITY_MODE_PRE_SHARED_KEY;
             if (bsPskId)
@@ -589,17 +591,14 @@ lwm2m_object_t * get_security_object(int serverId,
                 targetP->publicIdentity = strdup(bsPskId);
                 targetP->publicIdLen = strlen(bsPskId);
             }
-            if (pskLen > 0)
+            targetP->secretKey = (char*)lwm2m_malloc(pskLen);
+            if (targetP->secretKey == NULL)
             {
-                targetP->secretKey = (char*)lwm2m_malloc(pskLen);
-                if (targetP->secretKey == NULL)
-                {
-                    clean_security_object(securityObj);
-                    return NULL;
-                }
-                memcpy(targetP->secretKey, psk, pskLen);
-                targetP->secretKeyLen = pskLen;
+                clean_security_object(securityObj);
+                return NULL;
             }
+            memcpy(targetP->secretKey, psk, pskLen);
+            targetP->secretKeyLen = pskLen;
         }
         targetP->isBootstrap = isBootstrap;
         targetP->shortID = serverId;

@@ -283,7 +283,7 @@ int lwm2m_configure(lwm2m_context_t * contextP,
     // This API can be called only once for now
     if (contextP->endpointName != NULL || contextP->objectList != NULL) return COAP_400_BAD_REQUEST;
 
-    if (endpointName == NULL) return COAP_400_BAD_REQUEST;
+    if (endpointName == NULL || endpointName[0] == '\0') return COAP_400_BAD_REQUEST;
     if (numObject < 3) return COAP_400_BAD_REQUEST;
     // Check that mandatory objects are present
     found = 0;
