@@ -157,20 +157,6 @@ void init_value_change(lwm2m_context_t * lwm2m);
 void system_reboot(void);
 
 /*
- * object_gateway.c
- */
-#include "object_gateway.h"
-
-lwm2m_object_t * get_object_gateway(void);
-void free_object_gateway(lwm2m_object_t * objectP);
-void display_gateway_object(lwm2m_object_t * objectP);
-uint8_t gateway_add_instance(lwm2m_object_t * objectP, uint16_t instanceId, uint32_t device_id, connection_type_t conn_type, uint32_t model, const char *mac_address);
-uint8_t gateway_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
-uint8_t gateway_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value);
-uint8_t gateway_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value);
-uint8_t gateway_update_instance_bool(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, bool value);
-
-/*
  * object_security.c
  */
 lwm2m_object_t * get_security_object(int serverId, const char* serverUri, char * bsPskId, char * psk, uint16_t pskLen, bool isBootstrap);

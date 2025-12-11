@@ -12,12 +12,10 @@ set(SOURCES
     object_connectivity_stat.c
     object_device.c
     object_firmware.c
-    object_gateway.c
     object_location.c
     object_security.c
     object_server.c
     object_test.c
-    object_vendor.c
     object_wot_thing.c
     object_wot_data_feature.c
     object_wot_action.c
