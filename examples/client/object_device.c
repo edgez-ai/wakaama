@@ -700,16 +700,28 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
         return COAP_404_NOT_FOUND;
     }
 
-    if (length != 0) return COAP_400_BAD_REQUEST;
+    // Log execute parameters if provided
+    if (length > 0 && buffer != NULL) {
+        DEVICE_LOGI("Execute with %d bytes of parameters", length);
+        // Parameters are optional for LwM2M execute operations
+    }
 
     switch (resourceId)
     {
     case RES_M_REBOOT:
-        fprintf(stdout, "\n\t REBOOT\r\n\n");
+        fprintf(stdout, "\n\t REBOOT");
+        if (length > 0 && buffer != NULL) {
+            fprintf(stdout, " (with params: %.*s)", length, (char*)buffer);
+        }
+        fprintf(stdout, "\r\n\n");
         g_reboot = 1;
         return COAP_204_CHANGED;
     case RES_O_FACTORY_RESET:
-        fprintf(stdout, "\n\t FACTORY RESET\r\n\n");
+        fprintf(stdout, "\n\t FACTORY RESET");
+        if (length > 0 && buffer != NULL) {
+            fprintf(stdout, " (with params: %.*s)", length, (char*)buffer);
+        }
+        fprintf(stdout, "\r\n\n");
         if (s_factory_reset_cb) {
             DEVICE_LOGI("Factory reset execute received; invoking callback");
             s_factory_reset_cb();
@@ -718,7 +730,11 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
         }
         return COAP_204_CHANGED;
     case RES_O_RESET_ERROR_CODE:
-        fprintf(stdout, "\n\t RESET ERROR CODE\r\n\n");
+        fprintf(stdout, "\n\t RESET ERROR CODE");
+        if (length > 0 && buffer != NULL) {
+            fprintf(stdout, " (with params: %.*s)", length, (char*)buffer);
+        }
+        fprintf(stdout, "\r\n\n");
         targetP->error = 0;
         return COAP_204_CHANGED;
     default:
