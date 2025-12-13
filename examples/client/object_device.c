@@ -106,6 +106,11 @@ typedef struct _device_instance_
     char firmware_version[16]; // allow per-instance firmware version (was global macro)
 } device_instance_t;
 
+static void (*s_factory_reset_cb)(void) = NULL;
+void lwm2m_device_set_factory_reset_cb(void (*cb)(void)) {
+    s_factory_reset_cb = cb;
+}
+
 // Resource Id's:
 #define RES_O_MANUFACTURER          0
 #define RES_O_MODEL_NUMBER          1
@@ -705,6 +710,12 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
         return COAP_204_CHANGED;
     case RES_O_FACTORY_RESET:
         fprintf(stdout, "\n\t FACTORY RESET\r\n\n");
+        if (s_factory_reset_cb) {
+            DEVICE_LOGI("Factory reset execute received; invoking callback");
+            s_factory_reset_cb();
+        } else {
+            DEVICE_LOGI("Factory reset callback not set; ignoring request");
+        }
         return COAP_204_CHANGED;
     case RES_O_RESET_ERROR_CODE:
         fprintf(stdout, "\n\t RESET ERROR CODE\r\n\n");

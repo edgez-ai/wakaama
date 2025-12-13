@@ -90,6 +90,7 @@ uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 uint8_t device_remove_instance(lwm2m_object_t * objectP, uint16_t instanceId);
 uint8_t device_update_instance_value(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, int64_t value);
 uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanceId, uint16_t resourceId, const char* value);
+void lwm2m_device_set_factory_reset_cb(void (*cb)(void));
 /*
  * object_firmware.c
  */
