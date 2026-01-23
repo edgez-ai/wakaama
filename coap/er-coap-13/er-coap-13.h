@@ -164,9 +164,12 @@ typedef enum {
   COAP_OPTION_BLOCK2 = 23,        /* 1-3 B */
   COAP_OPTION_BLOCK1 = 27,        /* 1-3 B */
   COAP_OPTION_SIZE = 28,          /* 0-4 B */
+  COAP_OPTION_CLIENT_IDENTITY = 30, /* 0-255 B (custom, elective) */
   COAP_OPTION_PROXY_URI = 35,     /* 1-270 B */
   OPTION_MAX_VALUE = 0xFFFF
 } coap_option_t;
+
+#define COAP_OPTION_MAX_DEFINED COAP_OPTION_PROXY_URI
 
 /* CoAP Content-Types */
 typedef enum {
@@ -211,7 +214,7 @@ typedef struct {
   uint8_t code;
   uint16_t mid;
 
-  uint8_t options[COAP_OPTION_PROXY_URI / OPTION_MAP_SIZE + 1]; /* Bitmap to check if option is set */
+  uint8_t options[COAP_OPTION_MAX_DEFINED / OPTION_MAP_SIZE + 1]; /* Bitmap to check if option is set */
 
   coap_content_type_t content_type; /* Parse options once and store; allows setting options in random order  */
   uint32_t max_age;
@@ -229,6 +232,8 @@ typedef struct {
   uint32_t observe;
   uint8_t token_len;
   uint8_t token[COAP_TOKEN_LEN];
+  size_t client_identity_len;
+  const uint8_t *client_identity;
   uint8_t accept_num;
   uint16_t accept[COAP_MAX_ACCEPT_NUM];
   uint8_t if_match_len;
@@ -373,6 +378,9 @@ int coap_set_header_location_path(void *packet, const char *path); /* Also split
 
 int coap_get_header_location_query(void *packet, const char **query); /* In-place string might not be 0-terminated. */
 int coap_set_header_location_query(void *packet, char *query);
+
+int coap_get_header_client_identity(void *packet, const char **identity); /* In-place string might not be 0-terminated. */
+int coap_set_header_client_identity(void *packet, const char *identity, size_t identity_len);
 
 int coap_get_header_observe(void *packet, uint32_t *observe);
 int coap_set_header_observe(void *packet, uint32_t observe);

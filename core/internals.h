@@ -258,6 +258,7 @@ typedef bool (*senml_convertValue)(const senml_record_t *recordP, lwm2m_data_t *
 // defined in transaction.c
 lwm2m_transaction_t * transaction_new(void * sessionH, coap_method_t method, char * altPath, lwm2m_uri_t * uriP, uint16_t mID, uint8_t token_len, uint8_t* token);
 int transaction_send(lwm2m_context_t * contextP, lwm2m_transaction_t * transacP);
+bool transaction_set_client_identity(lwm2m_transaction_t *transaction, const uint8_t *identity, size_t identityLen);
 void transaction_free(lwm2m_transaction_t * transacP);
 void transaction_remove(lwm2m_context_t * contextP, lwm2m_transaction_t * transacP);
 bool transaction_handleResponse(lwm2m_context_t * contextP, void * fromSessionH, coap_packet_t * message, coap_packet_t * response);

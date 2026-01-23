@@ -490,7 +490,8 @@ static void prv_resultCallback(lwm2m_context_t * contextP,
 
 static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, coap_method_t method,
                              lwm2m_media_type_t format, uint8_t *buffer, size_t length,
-                             lwm2m_result_callback_t callback, void *userData) {
+                             lwm2m_result_callback_t callback, void *userData,
+                             const uint8_t *identity, size_t identityLen) {
     lwm2m_client_t * clientP;
     lwm2m_transaction_t * transaction;
     dm_data_t * dataP;
@@ -500,6 +501,15 @@ static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m
 
     transaction = transaction_new(clientP->sessionH, method, clientP->altPath, uriP, contextP->nextMID++, 4, NULL);
     if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
+
+    if (identity != NULL && identityLen > 0)
+    {
+        if (!transaction_set_client_identity(transaction, identity, identityLen))
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+    }
 
     if (method == COAP_GET)
     {
@@ -555,7 +565,8 @@ int prv_lwm2m_dm_read(lwm2m_context_t * contextP,
                              COAP_GET,
                              clientP->format,
                              NULL, 0,
-                             callback, userData);
+                             callback, userData,
+                             NULL, 0);
 }
 
 int lwm2m_dm_read(lwm2m_context_t * contextP,
@@ -565,6 +576,30 @@ int lwm2m_dm_read(lwm2m_context_t * contextP,
                   void * userData)
 {
     return prv_lwm2m_dm_read(contextP, clientID, uriP, callback, userData);
+}
+
+int lwm2m_dm_read_with_identity(lwm2m_context_t * contextP,
+                                uint16_t clientID,
+                                lwm2m_uri_t * uriP,
+                                lwm2m_result_callback_t callback,
+                                void * userData,
+                                const uint8_t *identity,
+                                size_t identityLen)
+{
+    lwm2m_client_t * clientP;
+
+    LOG_ARG_DBG("clientID: %d", clientID);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+
+    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    if (clientP == NULL) return COAP_404_NOT_FOUND;
+
+    return prv_makeOperation(contextP, clientID, uriP,
+                             COAP_GET,
+                             clientP->format,
+                             NULL, 0,
+                             callback, userData,
+                             identity, identityLen);
 }
 
 static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
@@ -583,11 +618,13 @@ static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2
         return prv_makeOperation(contextP, clientID, uriP,
                                   COAP_PUT,
                                   format, buffer, length,
-                                  callback, userData);
+                                  callback, userData,
+                                  NULL, 0);
     }
     else
     {
-        return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData);
+        return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
+                                 NULL, 0);
     }
 }
 
@@ -595,6 +632,33 @@ int lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *ur
                    uint8_t *buffer, size_t length, bool partialUpdate, lwm2m_result_callback_t callback,
                    void *userData) {
     return prv_lwm2m_dm_write(contextP, clientID, uriP, format, buffer, length, partialUpdate, callback, userData);
+}
+
+int lwm2m_dm_write_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                 lwm2m_media_type_t format, uint8_t *buffer, size_t length, bool partialUpdate,
+                                 lwm2m_result_callback_t callback, void *userData,
+                                 const uint8_t *identity, size_t identityLen) {
+    coap_method_t method = partialUpdate ? COAP_POST : COAP_PUT;
+
+    LOG_ARG_DBG("clientID: %d, format: %s, length: %zd", clientID, STR_MEDIA_TYPE(format), length);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    if (!LWM2M_URI_IS_SET_OBJECT(uriP) || length == 0) {
+        return COAP_400_BAD_REQUEST;
+    }
+
+    if (LWM2M_URI_IS_SET_RESOURCE(uriP))
+    {
+        return prv_makeOperation(contextP, clientID, uriP,
+                                 COAP_PUT,
+                                 format, buffer, length,
+                                 callback, userData,
+                                 identity, identityLen);
+    }
+    else
+    {
+        return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
+                                 identity, identityLen);
+    }
 }
 
 int lwm2m_dm_execute(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, lwm2m_media_type_t format,
@@ -609,7 +673,26 @@ int lwm2m_dm_execute(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *
     return prv_makeOperation(contextP, clientID, uriP,
                               COAP_POST,
                               format, buffer, length,
-                              callback, userData);
+                              callback, userData,
+                              NULL, 0);
+}
+
+int lwm2m_dm_execute_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                   lwm2m_media_type_t format, uint8_t *buffer, size_t length,
+                                   lwm2m_result_callback_t callback, void *userData,
+                                   const uint8_t *identity, size_t identityLen) {
+    LOG_ARG_DBG("clientID: %d, format: %s, length: %zd", clientID, STR_MEDIA_TYPE(format), length);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    if (!LWM2M_URI_IS_SET_RESOURCE(uriP))
+    {
+        return COAP_400_BAD_REQUEST;
+    }
+
+    return prv_makeOperation(contextP, clientID, uriP,
+                              COAP_POST,
+                              format, buffer, length,
+                              callback, userData,
+                              identity, identityLen);
 }
 
 static
@@ -655,7 +738,8 @@ int prv_lwm2m_dm_create(lwm2m_context_t * contextP,
     return prv_makeOperation(contextP, clientID, uriP,
                               COAP_POST,
                               format, buffer, length,
-                              callback, userData);
+                              callback, userData,
+                              NULL, 0);
 }
 
 int lwm2m_dm_create(lwm2m_context_t * contextP,
@@ -667,6 +751,54 @@ int lwm2m_dm_create(lwm2m_context_t * contextP,
                     void * userData)
 {
     return prv_lwm2m_dm_create(contextP, clientID, uriP, numData, dataP, callback, userData);
+}
+
+int lwm2m_dm_create_with_identity(lwm2m_context_t * contextP,
+                                  uint16_t clientID,
+                                  lwm2m_uri_t * uriP,
+                                  int numData,
+                                  lwm2m_data_t * dataP,
+                                  lwm2m_result_callback_t callback,
+                                  void * userData,
+                                  const uint8_t *identity,
+                                  size_t identityLen)
+{
+    uint8_t * buffer;
+    int length;
+    lwm2m_client_t * clientP;
+    lwm2m_media_type_t format;
+
+    LOG_ARG_DBG("clientID: %d, size: %d", clientID, numData);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+
+    if (LWM2M_URI_IS_SET_INSTANCE(uriP)
+     || numData == 0)
+    {
+        return COAP_400_BAD_REQUEST;
+    }
+
+    clientP = (lwm2m_client_t *)LWM2M_LIST_FIND(contextP->clientList, clientID);
+    if (clientP == NULL) return COAP_404_NOT_FOUND;
+
+    format = clientP->format;
+#ifdef LWM2M_SUPPORT_TLV
+    /* TODO: JSON formats currently require the object instance to be specified.
+     * Use TLV instead until that is fixed. */
+    if (format != LWM2M_CONTENT_TLV
+     && (numData > 1 || dataP[0].type != LWM2M_TYPE_OBJECT_INSTANCE))
+    {
+        format = LWM2M_CONTENT_TLV;
+    }
+#endif
+    length = lwm2m_data_serialize(uriP, numData, dataP, &format, &buffer);
+
+    if (length <= 0) return COAP_400_BAD_REQUEST;
+
+    return prv_makeOperation(contextP, clientID, uriP,
+                              COAP_POST,
+                              format, buffer, length,
+                              callback, userData,
+                              identity, identityLen);
 }
 
 int lwm2m_dm_delete(lwm2m_context_t * contextP,
@@ -686,7 +818,31 @@ int lwm2m_dm_delete(lwm2m_context_t * contextP,
     return prv_makeOperation(contextP, clientID, uriP,
                               COAP_DELETE,
                               LWM2M_CONTENT_TEXT, NULL, 0,
-                              callback, userData);
+                              callback, userData,
+                              NULL, 0);
+}
+
+int lwm2m_dm_delete_with_identity(lwm2m_context_t * contextP,
+                                  uint16_t clientID,
+                                  lwm2m_uri_t * uriP,
+                                  lwm2m_result_callback_t callback,
+                                  void * userData,
+                                  const uint8_t *identity,
+                                  size_t identityLen)
+{
+    LOG_ARG_DBG("clientID: %d", clientID);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    if (!LWM2M_URI_IS_SET_INSTANCE(uriP)
+     || LWM2M_URI_IS_SET_RESOURCE(uriP))
+    {
+        return COAP_400_BAD_REQUEST;
+    }
+
+    return prv_makeOperation(contextP, clientID, uriP,
+                              COAP_DELETE,
+                              LWM2M_CONTENT_TEXT, NULL, 0,
+                              callback, userData,
+                              identity, identityLen);
 }
 
 int lwm2m_dm_write_attributes(lwm2m_context_t * contextP,
@@ -830,6 +986,157 @@ int lwm2m_dm_write_attributes(lwm2m_context_t * contextP,
     return transaction_send(contextP, transaction);
 }
 
+int lwm2m_dm_write_attributes_with_identity(lwm2m_context_t * contextP,
+                                            uint16_t clientID,
+                                            lwm2m_uri_t * uriP,
+                                            lwm2m_attributes_t * attrP,
+                                            lwm2m_result_callback_t callback,
+                                            void * userData,
+                                            const uint8_t *identity,
+                                            size_t identityLen)
+{
+    lwm2m_client_t * clientP;
+    lwm2m_transaction_t * transaction;
+    coap_packet_t * coap_pkt;
+    uint8_t buffer[_PRV_BUFFER_SIZE];
+    size_t length;
+
+    LOG_ARG_DBG("clientID: %d", clientID);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    if (attrP == NULL) return COAP_400_BAD_REQUEST;
+
+    if (0 != (attrP->toSet & attrP->toClear)) return COAP_400_BAD_REQUEST;
+    if (0 != (attrP->toSet & ATTR_FLAG_NUMERIC) && !LWM2M_URI_IS_SET_RESOURCE(uriP)) return COAP_400_BAD_REQUEST;
+    if (ATTR_FLAG_NUMERIC == (attrP->toSet & ATTR_FLAG_NUMERIC)
+     && (attrP->lessThan + 2 * attrP->step >= attrP->greaterThan)) return COAP_400_BAD_REQUEST;
+
+    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    if (clientP == NULL) return COAP_404_NOT_FOUND;
+
+    transaction = transaction_new(clientP->sessionH, COAP_PUT, clientP->altPath, uriP, contextP->nextMID++, 4, NULL);
+    if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
+
+    if (identity != NULL && identityLen > 0)
+    {
+        if (!transaction_set_client_identity(transaction, identity, identityLen))
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+    }
+
+    if (callback != NULL)
+    {
+        dm_data_t * dataP;
+
+        dataP = (dm_data_t *)lwm2m_malloc(sizeof(dm_data_t));
+        if (dataP == NULL)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        memcpy(&dataP->uri, uriP, sizeof(lwm2m_uri_t));
+        dataP->clientID = clientP->internalID;
+        dataP->callback = callback;
+        dataP->userData = userData;
+
+        transaction->callback = prv_resultCallback;
+        transaction->userData = (void *)dataP;
+    }
+
+    coap_pkt = (coap_packet_t *)transaction->message;
+    free_multi_option(coap_pkt->uri_query);
+    if (attrP->toSet & LWM2M_ATTR_FLAG_MIN_PERIOD)
+    {
+        memcpy(buffer, ATTR_MIN_PERIOD_STR, ATTR_MIN_PERIOD_LEN);
+        length = utils_intToText(attrP->minPeriod, buffer + ATTR_MIN_PERIOD_LEN, _PRV_BUFFER_SIZE - ATTR_MIN_PERIOD_LEN);
+        if (length == 0)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_add_multi_option(&(coap_pkt->uri_query), buffer, ATTR_MIN_PERIOD_LEN + length, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toSet & LWM2M_ATTR_FLAG_MAX_PERIOD)
+    {
+        memcpy(buffer, ATTR_MAX_PERIOD_STR, ATTR_MAX_PERIOD_LEN);
+        length = utils_intToText(attrP->maxPeriod, buffer + ATTR_MAX_PERIOD_LEN, _PRV_BUFFER_SIZE - ATTR_MAX_PERIOD_LEN);
+        if (length == 0)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_add_multi_option(&(coap_pkt->uri_query), buffer, ATTR_MAX_PERIOD_LEN + length, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toSet & LWM2M_ATTR_FLAG_GREATER_THAN)
+    {
+        memcpy(buffer, ATTR_GREATER_THAN_STR, ATTR_GREATER_THAN_LEN);
+        length = utils_floatToText(attrP->greaterThan, buffer + ATTR_GREATER_THAN_LEN, _PRV_BUFFER_SIZE - ATTR_GREATER_THAN_LEN, false);
+        if (length == 0)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_add_multi_option(&(coap_pkt->uri_query), buffer, ATTR_GREATER_THAN_LEN + length, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toSet & LWM2M_ATTR_FLAG_LESS_THAN)
+    {
+        memcpy(buffer, ATTR_LESS_THAN_STR, ATTR_LESS_THAN_LEN);
+        length = utils_floatToText(attrP->lessThan, buffer + ATTR_LESS_THAN_LEN, _PRV_BUFFER_SIZE - ATTR_LESS_THAN_LEN, false);
+        if (length == 0)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_add_multi_option(&(coap_pkt->uri_query), buffer, ATTR_LESS_THAN_LEN + length, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toSet & LWM2M_ATTR_FLAG_STEP)
+    {
+        memcpy(buffer, ATTR_STEP_STR, ATTR_STEP_LEN);
+        length = utils_floatToText(attrP->step, buffer + ATTR_STEP_LEN, _PRV_BUFFER_SIZE - ATTR_STEP_LEN, false);
+        if (length == 0)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_add_multi_option(&(coap_pkt->uri_query), buffer, ATTR_STEP_LEN + length, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toClear & LWM2M_ATTR_FLAG_MIN_PERIOD)
+    {
+        coap_add_multi_option(&(coap_pkt->uri_query), (uint8_t*)ATTR_MIN_PERIOD_STR, ATTR_MIN_PERIOD_LEN -1, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toClear & LWM2M_ATTR_FLAG_MAX_PERIOD)
+    {
+        coap_add_multi_option(&(coap_pkt->uri_query), (uint8_t*)ATTR_MAX_PERIOD_STR, ATTR_MAX_PERIOD_LEN - 1, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toClear & LWM2M_ATTR_FLAG_GREATER_THAN)
+    {
+        coap_add_multi_option(&(coap_pkt->uri_query), (uint8_t*)ATTR_GREATER_THAN_STR, ATTR_GREATER_THAN_LEN - 1, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toClear & LWM2M_ATTR_FLAG_LESS_THAN)
+    {
+        coap_add_multi_option(&(coap_pkt->uri_query), (uint8_t*)ATTR_LESS_THAN_STR, ATTR_LESS_THAN_LEN - 1, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+    if (attrP->toClear & LWM2M_ATTR_FLAG_STEP)
+    {
+        coap_add_multi_option(&(coap_pkt->uri_query), (uint8_t*)ATTR_STEP_STR, ATTR_STEP_LEN - 1, 0);
+        SET_OPTION(coap_pkt, COAP_OPTION_URI_QUERY);
+    }
+
+    contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transaction);
+
+    return transaction_send(contextP, transaction);
+}
+
 int lwm2m_dm_discover(lwm2m_context_t * contextP,
                       uint16_t clientID,
                       lwm2m_uri_t * uriP,
@@ -847,6 +1154,59 @@ int lwm2m_dm_discover(lwm2m_context_t * contextP,
 
     transaction = transaction_new(clientP->sessionH, COAP_GET, clientP->altPath, uriP, contextP->nextMID++, 4, NULL);
     if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
+
+    coap_set_header_accept(transaction->message, LWM2M_CONTENT_LINK);
+
+    if (callback != NULL)
+    {
+        dataP = (dm_data_t *)lwm2m_malloc(sizeof(dm_data_t));
+        if (dataP == NULL)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        memcpy(&dataP->uri, uriP, sizeof(lwm2m_uri_t));
+        dataP->clientID = clientP->internalID;
+        dataP->callback = callback;
+        dataP->userData = userData;
+
+        transaction->callback = prv_resultCallback;
+        transaction->userData = (void *)dataP;
+    }
+
+    contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transaction);
+
+    return transaction_send(contextP, transaction);
+}
+
+int lwm2m_dm_discover_with_identity(lwm2m_context_t * contextP,
+                                    uint16_t clientID,
+                                    lwm2m_uri_t * uriP,
+                                    lwm2m_result_callback_t callback,
+                                    void * userData,
+                                    const uint8_t *identity,
+                                    size_t identityLen)
+{
+    lwm2m_client_t * clientP;
+    lwm2m_transaction_t * transaction;
+    dm_data_t * dataP;
+
+    LOG_ARG_DBG("clientID: %d", clientID);
+    LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
+    clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, clientID);
+    if (clientP == NULL) return COAP_404_NOT_FOUND;
+
+    transaction = transaction_new(clientP->sessionH, COAP_GET, clientP->altPath, uriP, contextP->nextMID++, 4, NULL);
+    if (transaction == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
+
+    if (identity != NULL && identityLen > 0)
+    {
+        if (!transaction_set_client_identity(transaction, identity, identityLen))
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+    }
 
     coap_set_header_accept(transaction->message, LWM2M_CONTENT_LINK);
 

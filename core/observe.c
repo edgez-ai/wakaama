@@ -1241,10 +1241,12 @@ static void prv_obsCancelRequestCallback(lwm2m_context_t * contextP,
 
 static
 int prv_lwm2m_observe(lwm2m_context_t * contextP,
-        uint16_t clientID,
-        lwm2m_uri_t * uriP,
-        lwm2m_result_callback_t callback,
-        void * userData)
+    uint16_t clientID,
+    lwm2m_uri_t * uriP,
+    lwm2m_result_callback_t callback,
+    void * userData,
+    const uint8_t *identity,
+    size_t identityLen)
 {
     lwm2m_client_t * clientP;
     lwm2m_transaction_t * transactionP;
@@ -1296,6 +1298,16 @@ int prv_lwm2m_observe(lwm2m_context_t * contextP,
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
 
+    if (identity != NULL && identityLen > 0)
+    {
+        if (!transaction_set_client_identity(transactionP, identity, identityLen))
+        {
+            transaction_free(transactionP);
+            lwm2m_free(observationData);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+    }
+
     coap_set_header_observe(transactionP->message, 0);
     coap_set_header_accept(transactionP->message, clientP->format);
 
@@ -1326,15 +1338,36 @@ int lwm2m_observe(lwm2m_context_t * contextP,
                              clientID,
                              uriP,
                              callback,
-                             userData);
+                 userData,
+                 NULL,
+                 0);
+}
+
+int lwm2m_observe_with_identity(lwm2m_context_t * contextP,
+    uint16_t clientID,
+    lwm2m_uri_t * uriP,
+    lwm2m_result_callback_t callback,
+    void * userData,
+    const uint8_t *identity,
+    size_t identityLen)
+{
+    return prv_lwm2m_observe(contextP,
+                 clientID,
+                 uriP,
+                 callback,
+                 userData,
+                 identity,
+                 identityLen);
 }
 
 static
 int prv_lwm2m_observe_cancel(lwm2m_context_t * contextP,
-        uint16_t clientID,
-        lwm2m_uri_t * uriP,
-        lwm2m_result_callback_t callback,
-        void * userData)
+    uint16_t clientID,
+    lwm2m_uri_t * uriP,
+    lwm2m_result_callback_t callback,
+    void * userData,
+    const uint8_t *identity,
+    size_t identityLen)
 {
     lwm2m_client_t * clientP;
     lwm2m_observation_t * observationP;
@@ -1375,6 +1408,15 @@ int prv_lwm2m_observe_cancel(lwm2m_context_t * contextP,
         }
 
         coap_set_header_observe(transactionP->message, 1);
+
+        if (identity != NULL && identityLen > 0)
+        {
+            if (!transaction_set_client_identity(transactionP, identity, identityLen))
+            {
+                transaction_free(transactionP);
+                return COAP_500_INTERNAL_SERVER_ERROR;
+            }
+        }
 
         // don't hold refer to the clientP
         cancelP->client = clientP->internalID;
@@ -1420,7 +1462,18 @@ int lwm2m_observe_cancel(lwm2m_context_t * contextP,
         lwm2m_result_callback_t callback,
         void * userData)
 {
-    return prv_lwm2m_observe_cancel(contextP, clientID, uriP, callback, userData);
+    return prv_lwm2m_observe_cancel(contextP, clientID, uriP, callback, userData, NULL, 0);
+}
+
+int lwm2m_observe_cancel_with_identity(lwm2m_context_t * contextP,
+        uint16_t clientID,
+        lwm2m_uri_t * uriP,
+        lwm2m_result_callback_t callback,
+        void * userData,
+        const uint8_t *identity,
+        size_t identityLen)
+{
+    return prv_lwm2m_observe_cancel(contextP, clientID, uriP, callback, userData, identity, identityLen);
 }
 
 bool observe_handleNotify(lwm2m_context_t * contextP,

@@ -605,6 +605,10 @@ size_t coap_serialize_get_size(void *packet)
         // can be stored in extended fields
         length += COAP_MAX_OPTION_HEADER_LEN;
     }
+    if (IS_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY))
+    {
+      length += COAP_MAX_OPTION_HEADER_LEN + coap_pkt->client_identity_len;
+    }
     if (IS_OPTION(coap_pkt, COAP_OPTION_PROXY_URI))
     {
         length += COAP_MAX_OPTION_HEADER_LEN + coap_pkt->proxy_uri_len;
@@ -675,6 +679,7 @@ coap_serialize_message(void *packet, uint8_t *buffer)
   COAP_SERIALIZE_BLOCK_OPTION(  COAP_OPTION_BLOCK2,         block2, "Block2")
   COAP_SERIALIZE_BLOCK_OPTION(  COAP_OPTION_BLOCK1,         block1, "Block1")
   COAP_SERIALIZE_INT_OPTION(    COAP_OPTION_SIZE,           size, "Size")
+  COAP_SERIALIZE_STRING_OPTION( COAP_OPTION_CLIENT_IDENTITY, client_identity, '\0', "Client-Identity")
   COAP_SERIALIZE_STRING_OPTION( COAP_OPTION_PROXY_URI,      proxy_uri, '\0', "Proxy-Uri")
 
   PRINTF("-Done serializing at %p----\n", option);
@@ -959,6 +964,11 @@ coap_parse_message(void *packet, uint8_t *data, uint16_t data_len)
         coap_pkt->size = coap_parse_int_option(current_option, option_length);
         PRINTF("Size [%lu]\n", coap_pkt->size);
         break;
+      case COAP_OPTION_CLIENT_IDENTITY:
+        coap_pkt->client_identity = current_option;
+        coap_pkt->client_identity_len = option_length;
+        PRINTF("Client-Identity [%.*s]\n", (int)coap_pkt->client_identity_len, coap_pkt->client_identity);
+        break;
       default:
         PRINTF("unknown (%u)\n", option_number);
         /* Check if critical (odd) */
@@ -988,6 +998,29 @@ exit_parse_error:
 /*-----------------------------------------------------------------------------------*/
 int
 coap_get_query_variable(void *packet, const char *name, const char **output)
+/*-----------------------------------------------------------------------------------*/
+int
+coap_get_header_client_identity(void *packet, const char **identity)
+{
+  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
+
+  if (!IS_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY)) return 0;
+
+  *identity = (const char *)coap_pkt->client_identity;
+  return coap_pkt->client_identity_len;
+}
+
+int
+coap_set_header_client_identity(void *packet, const char *identity, size_t identity_len)
+{
+  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
+
+  coap_pkt->client_identity = (const uint8_t *)identity;
+  coap_pkt->client_identity_len = identity_len;
+
+  SET_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY);
+  return coap_pkt->client_identity_len;
+}
 {
     /* unused parameters */
     (void)packet;

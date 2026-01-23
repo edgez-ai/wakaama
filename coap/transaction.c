@@ -261,6 +261,13 @@ void transaction_free(lwm2m_transaction_t * transacP)
        transacP->message = NULL;
     }
 
+    if (transacP->client_identity)
+    {
+        lwm2m_free(transacP->client_identity);
+        transacP->client_identity = NULL;
+        transacP->client_identity_len = 0;
+    }
+
     if (transacP->payload) {
         lwm2m_free(transacP->payload);
         transacP->payload = NULL;
@@ -272,6 +279,32 @@ void transaction_free(lwm2m_transaction_t * transacP)
     }
 
     lwm2m_free(transacP);
+}
+
+bool transaction_set_client_identity(lwm2m_transaction_t *transaction, const uint8_t *identity, size_t identityLen)
+{
+    if (transaction == NULL || identity == NULL || identityLen == 0)
+    {
+        return false;
+    }
+
+    if (transaction->client_identity != NULL)
+    {
+        lwm2m_free(transaction->client_identity);
+        transaction->client_identity = NULL;
+        transaction->client_identity_len = 0;
+    }
+
+    transaction->client_identity = (uint8_t *)lwm2m_malloc(identityLen);
+    if (transaction->client_identity == NULL)
+    {
+        return false;
+    }
+
+    memcpy(transaction->client_identity, identity, identityLen);
+    transaction->client_identity_len = identityLen;
+    coap_set_header_client_identity(transaction->message, (const char *)transaction->client_identity, identityLen);
+    return true;
 }
 
 void transaction_remove(lwm2m_context_t * contextP,

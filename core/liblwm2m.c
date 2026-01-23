@@ -76,6 +76,18 @@ lwm2m_context_t * lwm2m_init(void * userData)
 }
 
 #ifdef LWM2M_CLIENT_MODE
+void lwm2m_set_acl_callback(lwm2m_context_t *contextP, lwm2m_acl_callback_t callback, void *userData)
+{
+    if (contextP == NULL) {
+        return;
+    }
+
+    contextP->aclCallback = callback;
+    contextP->aclUserData = userData;
+}
+#endif
+
+#ifdef LWM2M_CLIENT_MODE
 void lwm2m_deregister(lwm2m_context_t * context)
 {
     lwm2m_server_t * server = context->serverList;

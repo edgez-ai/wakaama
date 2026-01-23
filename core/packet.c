@@ -164,6 +164,19 @@ static uint8_t handle_request(lwm2m_context_t * contextP,
     {
         lwm2m_server_t * serverP;
 
+        if (contextP->aclCallback != NULL)
+        {
+            const char *identity = NULL;
+            int identityLen = coap_get_header_client_identity(message, &identity);
+            uint8_t aclResult = contextP->aclCallback(contextP, fromSessionH, &uri, message->code,
+                                                     (const uint8_t *)identity, (size_t)identityLen,
+                                                     contextP->aclUserData);
+            if (aclResult != COAP_NO_ERROR)
+            {
+                return aclResult;
+            }
+        }
+
         serverP = utils_findServer(contextP, fromSessionH);
         if (serverP != NULL)
         {
