@@ -998,29 +998,6 @@ exit_parse_error:
 /*-----------------------------------------------------------------------------------*/
 int
 coap_get_query_variable(void *packet, const char *name, const char **output)
-/*-----------------------------------------------------------------------------------*/
-int
-coap_get_header_client_identity(void *packet, const char **identity)
-{
-  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
-
-  if (!IS_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY)) return 0;
-
-  *identity = (const char *)coap_pkt->client_identity;
-  return coap_pkt->client_identity_len;
-}
-
-int
-coap_set_header_client_identity(void *packet, const char *identity, size_t identity_len)
-{
-  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
-
-  coap_pkt->client_identity = (const uint8_t *)identity;
-  coap_pkt->client_identity_len = identity_len;
-
-  SET_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY);
-  return coap_pkt->client_identity_len;
-}
 {
     /* unused parameters */
     (void)packet;
@@ -1045,6 +1022,29 @@ coap_get_post_variable(void *packet, const char *name, const char **output)
     return coap_get_variable(coap_pkt->payload, coap_pkt->payload_len, name, output);
   }
   return 0;
+}
+/*-----------------------------------------------------------------------------------*/
+int
+coap_get_header_client_identity(void *packet, const char **identity)
+{
+  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
+
+  if (!IS_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY)) return 0;
+
+  *identity = (const char *)coap_pkt->client_identity;
+  return coap_pkt->client_identity_len;
+}
+
+int
+coap_set_header_client_identity(void *packet, const char *identity, size_t identity_len)
+{
+  coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
+
+  coap_pkt->client_identity = (const uint8_t *)identity;
+  coap_pkt->client_identity_len = identity_len;
+
+  SET_OPTION(coap_pkt, COAP_OPTION_CLIENT_IDENTITY);
+  return coap_pkt->client_identity_len;
 }
 /*-----------------------------------------------------------------------------------*/
 int
