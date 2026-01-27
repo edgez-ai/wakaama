@@ -29,7 +29,7 @@ idf_component_register(
 target_compile_definitions(${COMPONENT_TARGET}
                     PUBLIC
                     "LWM2M_CLIENT_MODE"
-                    "LWM2M_COAP_DEFAULT_BLOCK_SIZE=512"
+                    "LWM2M_COAP_DEFAULT_BLOCK_SIZE=1024"
                     "LWM2M_COAP_MAX_MESSAGE_SIZE=48384"
                                         "LWM2M_COAP_DEFAULT_MAX_RETRANSMIT=2"
                                         "LWM2M_COAP_SEPARATE_TIMEOUT=30"
