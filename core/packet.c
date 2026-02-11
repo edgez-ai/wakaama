@@ -517,6 +517,9 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
     coap_error_code = coap_parse_message(message, buffer, (uint16_t)length);
     if (coap_error_code == NO_ERROR)
     {
+        fprintf(stderr, "[DBG-SRV] PARSED: type=%u code=%u.%02u mid=%u payload_len=%zu pkt_len=%zu content_type=%d\r\n",
+                message->type, message->code >> 5, message->code & 0x1F,
+                message->mid, message->payload_len, length, message->content_type);
         LOG_ARG_DBG("Parsed: ver %u, type %u, tkl %u, code %u.%.2u, mid %u, Content type: %d", message->version,
                     message->type, message->token_len, message->code >> 5, message->code & 0x1F, message->mid,
                     message->content_type);
@@ -703,7 +706,12 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
             {
             case COAP_TYPE_NON:
             case COAP_TYPE_CON:
+                fprintf(stderr, "[DBG-SRV] Response NON/CON: payload_len=%zu block_size=%zu has_observe=%d\r\n",
+                        message->payload_len, lwm2m_get_coap_block_size(),
+                        IS_OPTION(message, COAP_OPTION_OBSERVE));
                 if (message->payload_len > lwm2m_get_coap_block_size()) {
+                    fprintf(stderr, "[DBG-SRV] payload_len %zu > block_size %zu => BLOCK2 RETRY (notify will fail!)\r\n",
+                            message->payload_len, lwm2m_get_coap_block_size());
 #ifdef LWM2M_CLIENT_MODE
                     // get server
                     lwm2m_server_t * peerP;
@@ -726,6 +734,8 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
                     }
                     transaction_handleResponse(contextP, fromSessionH, message, NULL);
                 } else {
+                    fprintf(stderr, "[DBG-SRV] payload_len %zu <= block_size %zu => NORMAL PATH\r\n",
+                            message->payload_len, lwm2m_get_coap_block_size());
 
                     bool done = transaction_handleResponse(contextP, fromSessionH, message, response);
 
@@ -734,6 +744,7 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
                         ((message->code == COAP_204_CHANGED) || (message->code == COAP_205_CONTENT)))
                     {
                         done = observe_handleNotify(contextP, fromSessionH, message, response);
+                        fprintf(stderr, "[DBG-SRV] observe_handleNotify returned %d\r\n", done);
                     }
     #endif
                     if (!done && message->type == COAP_TYPE_CON )
@@ -868,6 +879,8 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
     } /* if (parsed correctly) */
     else
     {
+        fprintf(stderr, "[DBG-SRV] PARSE FAILED: error=%u.%02u pkt_len=%zu\r\n",
+                coap_error_code >> 5, coap_error_code & 0x1F, length);
         LOG_ARG_DBG("Message parsing failed %u.%02u", coap_error_code >> 5, coap_error_code & 0x1F);
     }
 
