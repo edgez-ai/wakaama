@@ -511,6 +511,8 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
     static coap_packet_t response[1];
 
     LOG_DBG("Entering");
+    fprintf(stderr, "[DBG-SRV] lwm2m_handle_packet: received %zu bytes\r\n", length);
+    
     /* The buffer length is uint16_t here, as UDP packet length field is 16 bit.
      * This might change in the future e.g. for supporting TCP or other transport.
      */
