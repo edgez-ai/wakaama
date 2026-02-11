@@ -711,9 +711,20 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
                 fprintf(stderr, "[DBG-SRV] Response NON/CON: payload_len=%zu block_size=%zu has_observe=%d\r\n",
                         message->payload_len, lwm2m_get_coap_block_size(),
                         IS_OPTION(message, COAP_OPTION_OBSERVE));
-                if (message->payload_len > lwm2m_get_coap_block_size()) {
-                    fprintf(stderr, "[DBG-SRV] payload_len %zu > block_size %zu => BLOCK2 RETRY (notify will fail!)\r\n",
-                            message->payload_len, lwm2m_get_coap_block_size());
+                
+                /* Check if this is a block-wise transfer by checking BLOCK2 option with more flag */
+                bool is_blockwise = false;
+                if (IS_OPTION(message, COAP_OPTION_BLOCK2) && message->block2_more) {
+                    is_blockwise = true;
+                    fprintf(stderr, "[DBG-SRV] BLOCK2 detected: num=%u more=%u size=%u => INITIATING BLOCK REQUEST\r\n",
+                            message->block2_num, message->block2_more, message->block2_size);
+                }
+                
+                if (is_blockwise || message->payload_len > lwm2m_get_coap_block_size()) {
+                    if (!is_blockwise) {
+                        fprintf(stderr, "[DBG-SRV] payload_len %zu > block_size %zu => BLOCK2 RETRY (notify will fail!)\r\n",
+                                message->payload_len, lwm2m_get_coap_block_size());
+                    }
 #ifdef LWM2M_CLIENT_MODE
                     // get server
                     lwm2m_server_t * peerP;
