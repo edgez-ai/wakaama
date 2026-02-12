@@ -713,16 +713,24 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
                         IS_OPTION(message, COAP_OPTION_OBSERVE));
                 
                 /* Check if this is a block-wise transfer by checking BLOCK2 option with more flag */
-                bool is_blockwise = false;
+                /* For observe notifications, we handle them via observe_handleNotify -> prv_notify_callback */
+                bool is_blockwise_non_observe = false;
                 if (IS_OPTION(message, COAP_OPTION_BLOCK2) && message->block2_more) {
-                    is_blockwise = true;
-                    fprintf(stderr, "[DBG-SRV] BLOCK2 detected: num=%u more=%u size=%u => INITIATING BLOCK REQUEST\r\n",
+                    fprintf(stderr, "[DBG-SRV] BLOCK2 detected: num=%u more=%u size=%u\r\n",
                             message->block2_num, message->block2_more, message->block2_size);
+                    
+                    /* Only use block-wise retry path for non-observe responses */
+                    if (!IS_OPTION(message, COAP_OPTION_OBSERVE)) {
+                        is_blockwise_non_observe = true;
+                        fprintf(stderr, "[DBG-SRV] Non-observe block-wise response => RETRY PATH\r\n");
+                    } else {
+                        fprintf(stderr, "[DBG-SRV] Observe notification with BLOCK2 => NOTIFY PATH (callback will handle)\r\n");
+                    }
                 }
                 
-                if (is_blockwise || message->payload_len > lwm2m_get_coap_block_size()) {
-                    if (!is_blockwise) {
-                        fprintf(stderr, "[DBG-SRV] payload_len %zu > block_size %zu => BLOCK2 RETRY (notify will fail!)\r\n",
+                if (is_blockwise_non_observe || message->payload_len > lwm2m_get_coap_block_size()) {
+                    if (!is_blockwise_non_observe) {
+                        fprintf(stderr, "[DBG-SRV] payload_len %zu > block_size %zu => BLOCK2 RETRY\r\n",
                                 message->payload_len, lwm2m_get_coap_block_size());
                     }
 #ifdef LWM2M_CLIENT_MODE
