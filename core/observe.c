@@ -780,28 +780,47 @@ void observe_step(lwm2m_context_t * contextP,
                         {
                             int res;
 
+                            fprintf(stderr, "[DBG] observe notify: calling lwm2m_data_serialize for %d data items, format=%d\r\n", size, watcherP->format);
                             res = lwm2m_data_serialize(&targetP->uri, size, dataP, &(watcherP->format), &buffer);
                             if (res < 0)
                             {
+                                fprintf(stderr, "[DBG] observe notify: serialize FAILED (returned %d)\r\n", res);
                                 break;
                             }
                             else
                             {
                                 length = (size_t)res;
+                                fprintf(stderr, "[DBG] observe notify: serialize OK => %zu bytes\r\n", length);
                             }
 
                         }
                         else
                         {
+                            fprintf(stderr, "[DBG] observe notify: calling object_read\r\n");
                             if (COAP_205_CONTENT != object_read(contextP, &targetP->uri, NULL, 0, &(watcherP->format), &buffer, &length))
                             {
+                                fprintf(stderr, "[DBG] observe notify: object_read FAILED\r\n");
                                 buffer = NULL;
                                 break;
                             }
+                            fprintf(stderr, "[DBG] observe notify: object_read OK => %zu bytes\r\n", length);
                         }
+                        
+                        fprintf(stderr, "[DBG] observe notify: preparing notification for uri, length=%zu bytes\r\n", length);
+                        
+                        /* For large payloads, use block-wise transfer by sending first block with BLOCK2 header */
+                        uint16_t block_size = LWM2M_COAP_DEFAULT_BLOCK_SIZE;
+                        size_t payload_size = (length > block_size) ? block_size : length;
+                        
                         coap_init_message(message, COAP_TYPE_NON, COAP_205_CONTENT, 0);
                         coap_set_header_content_type(message, watcherP->format);
-                        coap_set_payload(message, buffer, length);
+                        
+                        if (length > block_size) {
+                            fprintf(stderr, "[DBG] observe notify: large payload detected (%zu bytes > %u), using block-wise transfer\r\n", length, block_size);
+                            coap_set_header_block2(message, 0, 1, block_size);  /* block_num=0, more=1 */
+                        }
+                        
+                        coap_set_payload(message, buffer, payload_size);
                     }
                     watcherP->lastTime = currentTime;
                     watcherP->lastMid = contextP->nextMID++;

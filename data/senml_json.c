@@ -30,7 +30,7 @@
 #error SenML JSON not supported with LWM2M 1.0
 #endif
 
-#define PRV_JSON_BUFFER_SIZE 1024
+#define PRV_JSON_BUFFER_SIZE 10240
 
 #define JSON_FALSE_STRING                 "false"
 #define JSON_FALSE_STRING_SIZE            5
@@ -1146,9 +1146,14 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
     if (head + 1 > PRV_JSON_BUFFER_SIZE) return 0;
     bufferJSON[head++] = JSON_FOOTER;
 
+    fprintf(stderr, "[DBG] SENML JSON: malloc(%zu) for final buffer\r\n", head);
     *bufferP = (uint8_t *)lwm2m_malloc(head);
-    if (*bufferP == NULL) return -1;
+    if (*bufferP == NULL) {
+        fprintf(stderr, "[DBG] SENML JSON: malloc FAILED\r\n");
+        return -1;
+    }
     memcpy(*bufferP, bufferJSON, head);
+    fprintf(stderr, "[DBG] SENML JSON: success, returning %zu bytes\r\n", head);
 
     return head;
 }
