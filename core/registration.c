@@ -1221,13 +1221,15 @@ static int prv_getParameters(multi_option_t * query,
                              uint32_t * lifetimeP,
                              char ** msisdnP,
                              lwm2m_binding_t * bindingP,
-                             lwm2m_version_t * versionP)
+                             lwm2m_version_t * versionP,
+                             uint32_t * sampleVersionP)
 {
     *nameP = NULL;
     *lifetimeP = 0;
     *msisdnP = NULL;
     *bindingP = 0;
     *versionP = VERSION_MISSING;
+    *sampleVersionP = 0;
 
     while (query != NULL)
     {
@@ -1285,6 +1287,41 @@ static int prv_getParameters(multi_option_t * query,
             if (query->len == QUERY_BINDING_LEN) goto error;
 
             *bindingP |= utils_stringToBinding(query->data + QUERY_BINDING_LEN, query->len - QUERY_BINDING_LEN);
+        }
+        else if ((query->len > 3 && lwm2m_strncmp((char *)query->data, "sv=", 3) == 0) ||
+                 (query->len > 8 && lwm2m_strncmp((char *)query->data, "version=", 8) == 0) ||
+                 (query->len > 11 && lwm2m_strncmp((char *)query->data, "sample_ver=", 11) == 0) ||
+                 (query->len > 15 && lwm2m_strncmp((char *)query->data, "sample_version=", 15) == 0))
+        {
+            uint16_t valueStart = 0;
+            uint16_t i;
+
+            if (*sampleVersionP != 0) goto error;
+
+            if (lwm2m_strncmp((char *)query->data, "sv=", 3) == 0)
+            {
+                valueStart = 3;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "version=", 8) == 0)
+            {
+                valueStart = 8;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "sample_ver=", 11) == 0)
+            {
+                valueStart = 11;
+            }
+            else
+            {
+                valueStart = 15;
+            }
+
+            if (query->len == valueStart) goto error;
+
+            for (i = valueStart; i < query->len; i++)
+            {
+                if (query->data[i] < '0' || query->data[i] > '9') goto error;
+                *sampleVersionP = (*sampleVersionP * 10u) + (uint32_t)(query->data[i] - '0');
+            }
         }
 #ifndef LWM2M_VERSION_1_0
         else if (lwm2m_strncmp((char *)query->data, QUERY_QUEUE_MODE, QUERY_QUEUE_MODE_LEN) == 0)
@@ -1796,13 +1833,14 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         char * msisdn;
         char * altPath;
         lwm2m_version_t version;
+        uint32_t sampleVersion;
         lwm2m_binding_t binding;
         lwm2m_client_object_t * objects;
         lwm2m_media_type_t format;
         lwm2m_client_t * clientP;
         char location[MAX_LOCATION_LENGTH];
 
-        if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version))
+        if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion))
         {
             return COAP_400_BAD_REQUEST;
         }
@@ -1897,6 +1935,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             }
             clientP->name = name;
             clientP->version = version;
+            clientP->sampleConfigVersion = sampleVersion;
             clientP->binding = binding;
             clientP->msisdn = msisdn;
             clientP->altPath = altPath;
@@ -1942,6 +1981,10 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (binding != BINDING_UNKNOWN)
             {
                 clientP->binding = binding;
+            }
+            if (sampleVersion != 0)
+            {
+                clientP->sampleConfigVersion = sampleVersion;
             }
             if (msisdn != NULL)
             {
