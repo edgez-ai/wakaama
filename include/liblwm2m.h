@@ -728,6 +728,7 @@ typedef struct _lwm2m_client_
     uint16_t                internalID; // matches lwm2m_list_t::id
     char *                  name;
     lwm2m_version_t         version;
+    uint32_t                sampleConfigVersion;
     lwm2m_binding_t         binding;
     char *                  msisdn;
     char *                  altPath;
