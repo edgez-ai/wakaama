@@ -69,6 +69,8 @@
 
 #ifdef LWM2M_CLIENT_MODE
 extern char serialNumber[64];
+__attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
+
 static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
                                           lwm2m_server_t * server)
 {
@@ -142,6 +144,18 @@ static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
         res = utils_intToText(server->lifetime, buffer, sizeof(buffer));
         if (res == 0) return 0;
         index += res;
+    }
+
+    if (lwm2m_sample_get_config_version)
+    {
+        uint32_t sample_ver = lwm2m_sample_get_config_version();
+        if (sample_ver > 0)
+        {
+            index += strlen("&sv=");
+            res = utils_intToText(sample_ver, buffer, sizeof(buffer));
+            if (res == 0) return 0;
+            index += res;
+        }
     }
 
     return index + 1;
@@ -241,6 +255,20 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
         res = utils_intToText(server->lifetime, (uint8_t *)buffer + index, length - index);
         if (res == 0) return 0;
         index += res;
+    }
+
+    if (lwm2m_sample_get_config_version)
+    {
+        uint32_t sample_ver = lwm2m_sample_get_config_version();
+        if (sample_ver > 0)
+        {
+            res = utils_stringCopy(buffer + index, length - index, "&sv=");
+            if (res < 0) return 0;
+            index += res;
+            res = utils_intToText(sample_ver, (uint8_t *)buffer + index, length - index);
+            if (res == 0) return 0;
+            index += res;
+        }
     }
 
     if(index < length)
