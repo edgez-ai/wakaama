@@ -1209,7 +1209,8 @@ static int prv_getParameters(multi_option_t * query,
                              char ** msisdnP,
                              lwm2m_binding_t * bindingP,
                              lwm2m_version_t * versionP,
-                             uint32_t * sampleVersionP)
+                             uint32_t * sampleVersionP,
+                             bool * sampleVersionSetP)
 {
     *nameP = NULL;
     *lifetimeP = 0;
@@ -1217,6 +1218,7 @@ static int prv_getParameters(multi_option_t * query,
     *bindingP = 0;
     *versionP = VERSION_MISSING;
     *sampleVersionP = 0;
+    *sampleVersionSetP = false;
 
     while (query != NULL)
     {
@@ -1283,7 +1285,7 @@ static int prv_getParameters(multi_option_t * query,
             uint16_t valueStart = 0;
             uint16_t i;
 
-            if (*sampleVersionP != 0) goto error;
+            if (*sampleVersionSetP) goto error;
 
             if (lwm2m_strncmp((char *)query->data, "sv=", 3) == 0)
             {
@@ -1309,6 +1311,7 @@ static int prv_getParameters(multi_option_t * query,
                 if (query->data[i] < '0' || query->data[i] > '9') goto error;
                 *sampleVersionP = (*sampleVersionP * 10u) + (uint32_t)(query->data[i] - '0');
             }
+            *sampleVersionSetP = true;
         }
 #ifndef LWM2M_VERSION_1_0
         else if (lwm2m_strncmp((char *)query->data, QUERY_QUEUE_MODE, QUERY_QUEUE_MODE_LEN) == 0)
@@ -1824,13 +1827,14 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         char * altPath;
         lwm2m_version_t version;
         uint32_t sampleVersion;
+        bool sampleVersionSet;
         lwm2m_binding_t binding;
         lwm2m_client_object_t * objects;
         lwm2m_media_type_t format;
         lwm2m_client_t * clientP;
         char location[MAX_LOCATION_LENGTH];
 
-        if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion))
+        if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion, &sampleVersionSet))
         {
             return COAP_400_BAD_REQUEST;
         }
@@ -1972,7 +1976,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             {
                 clientP->binding = binding;
             }
-            if (sampleVersion != 0)
+            if (sampleVersionSet)
             {
                 clientP->sampleConfigVersion = sampleVersion;
             }
