@@ -845,13 +845,7 @@ static uint8_t prv_register(lwm2m_context_t * contextP,
         return COAP_503_SERVICE_UNAVAILABLE;
     }
 
-    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-        char uri_path[128];
-        snprintf(uri_path, sizeof(uri_path), "/"URI_REGISTRATION_SEGMENT"/%s", serialNumber);
-        coap_set_header_uri_path(transaction->message, uri_path);
-    }else {
-        coap_set_header_uri_path(transaction->message, "/"URI_REGISTRATION_SEGMENT);
-    }
+    coap_set_header_uri_path(transaction->message, "/"URI_REGISTRATION_SEGMENT);
     coap_set_header_uri_query(transaction->message, query);
     coap_set_header_content_type(transaction->message, LWM2M_CONTENT_LINK);
 
@@ -873,11 +867,7 @@ static uint8_t prv_register(lwm2m_context_t * contextP,
     dataP->payload = payload;
     dataP->query = query;
     dataP->server = server;
-    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-        transaction->callback = prv_handleRegistrationUpdateReply;
-    } else {
-        transaction->callback = prv_handleRegistrationReply;
-    }
+    transaction->callback = prv_handleRegistrationReply;
 
     transaction->userData = (void *) dataP;
 
