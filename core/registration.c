@@ -1447,16 +1447,8 @@ static int prv_parseLinkAttributes(uint8_t * data,
 
         if (keyLength == REG_ATTR_TYPE_KEY_LEN &&
             0 == lwm2m_strncmp(REG_ATTR_TYPE_KEY, (char *)data + index + keyStart, keyLength)) {
-            uint8_t *valuePtr = data + index + valueStart;
-            uint16_t valueLen = valueLength;
-            if (valueLen >= 2 && valuePtr[0] == '"' && valuePtr[valueLen - 1] == '"')
-            {
-                valuePtr++;
-                valueLen -= 2;
-            }
-
-            if (valueLen != REG_ATTR_TYPE_VALUE_LEN
-             || 0 != lwm2m_strncmp(REG_ATTR_TYPE_VALUE, (char*)valuePtr, valueLen))
+            if (valueLength != REG_ATTR_TYPE_VALUE_LEN
+             || 0 != lwm2m_strncmp(REG_ATTR_TYPE_VALUE, (char*)data + index + valueStart, valueLength))
             {
                 return 0;
             }
