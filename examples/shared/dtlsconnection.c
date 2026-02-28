@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include "dtlsconnection.h"
 #include "commandline.h"
 #include "esp_log.h"
@@ -28,6 +29,8 @@
 #define COAPS_PORT "5684"
 #define URI_LENGTH 256
 
+static const char *TAG = "wakaama_udp";
+
 dtls_context_t * dtlsContext;
 
 typedef struct _dtls_app_context_
@@ -35,6 +38,44 @@ typedef struct _dtls_app_context_
     lwm2m_context_t * lwm2mH;
     dtls_connection_t * connList;
 } dtls_app_context_t;
+
+static void log_connection_endpoint(const char *prefix, const dtls_connection_t *connP)
+{
+    if (connP == NULL)
+    {
+        ESP_LOGI(TAG, "%s: conn=NULL", prefix);
+        return;
+    }
+
+    if (connP->addr.sin6_family == AF_INET)
+    {
+        const struct sockaddr_in *saddr = (const struct sockaddr_in *)&connP->addr;
+        char ip[INET_ADDRSTRLEN] = {0};
+        if (inet_ntop(AF_INET, &saddr->sin_addr, ip, sizeof(ip)) != NULL)
+        {
+            ESP_LOGI(TAG, "%s: sock=%d remote=%s:%u family=AF_INET secure=%u", prefix,
+                     connP->sock, ip, (unsigned)ntohs(saddr->sin_port),
+                     (unsigned)(connP->dtlsSession != NULL));
+        }
+        return;
+    }
+
+    if (connP->addr.sin6_family == AF_INET6)
+    {
+        const struct sockaddr_in6 *saddr6 = (const struct sockaddr_in6 *)&connP->addr;
+        char ip[INET6_ADDRSTRLEN] = {0};
+        if (inet_ntop(AF_INET6, &saddr6->sin6_addr, ip, sizeof(ip)) != NULL)
+        {
+            ESP_LOGI(TAG, "%s: sock=%d remote=[%s]:%u family=AF_INET6 secure=%u", prefix,
+                     connP->sock, ip, (unsigned)ntohs(saddr6->sin6_port),
+                     (unsigned)(connP->dtlsSession != NULL));
+        }
+        return;
+    }
+
+    ESP_LOGI(TAG, "%s: sock=%d remote_family=%d secure=%u", prefix, connP->sock,
+             connP->addr.sin6_family, (unsigned)(connP->dtlsSession != NULL));
+}
 
 /********************* Security Obj Helpers **********************/
 char *security_get_uri(lwm2m_context_t *lwm2mH, lwm2m_object_t *obj, int instanceId, char *uriBuffer,
@@ -193,19 +234,29 @@ int send_data(dtls_connection_t *connP,
     int sock = connP->sock;
     if (sock < 0) {
         LOG("Invalid socket in connection");
+        log_connection_endpoint("send_data invalid socket", connP);
         return -1;
     }
+
+    log_connection_endpoint("send_data start", connP);
+
     while (offset != length)
     {
         LOG("sending message");
         nbSent = sendto(sock, buffer + offset, length - offset, 0, (struct sockaddr *)&(connP->addr), connP->addrLen);
             if (nbSent == -1) {
                 LOG("send_data: sendto() failed");
+                ESP_LOGW(TAG, "send_data failed: sock=%d req=%u offset=%u errno=%d (%s)",
+                         sock, (unsigned)length, (unsigned)offset, errno, strerror(errno));
+                log_connection_endpoint("send_data failed endpoint", connP);
                 return -1;
             }
+        ESP_LOGI(TAG, "send_data progress: sock=%d sent=%d total=%u/%u", sock, nbSent,
+                 (unsigned)(offset + nbSent), (unsigned)length);
         offset += nbSent;
     }
     connP->lastSend = lwm2m_gettime();
+    ESP_LOGI(TAG, "send_data complete: sock=%d bytes=%u", sock, (unsigned)offset);
     return offset;
 }
 
@@ -544,7 +595,13 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
         port++;
     }
 
-    if (0 != getaddrinfo(host, port, &hints, &servinfo) || servinfo == NULL) return NULL;
+    ESP_LOGI(TAG, "connection_create: uri_host=%s port=%s family=%d sock=%d", host, port,
+             addressFamily, sock);
+
+    if (0 != getaddrinfo(host, port, &hints, &servinfo) || servinfo == NULL) {
+        ESP_LOGW(TAG, "connection_create: getaddrinfo failed host=%s port=%s", host, port);
+        return NULL;
+    }
 
     // we test the various addresses
     s = -1;
@@ -573,6 +630,8 @@ dtls_connection_t * connection_create(dtls_connection_t * connList,
             connP->securityObj = securityObj;
             connP->securityInstId = instanceId;
             connP->lwm2mH = lwm2mH;
+
+            log_connection_endpoint("connection_create resolved endpoint", connP);
 
             if (security_get_mode(lwm2mH, connP->securityObj,connP->securityInstId)
                      != LWM2M_SECURITY_MODE_NONE)
@@ -608,12 +667,16 @@ void connection_free(dtls_connection_t * connList)
 }
 
 int connection_send(dtls_connection_t *connP, uint8_t * buffer, size_t length){
+    log_connection_endpoint("connection_send", connP);
+
     if (connP->dtlsSession == NULL) {
         // no security
         if (0 >= send_data(connP, buffer, length)) {
             LOG("connection_send: send_data error");
+            ESP_LOGW(TAG, "connection_send plaintext failed len=%u", (unsigned)length);
             return -1 ;
         }
+        ESP_LOGI(TAG, "connection_send plaintext ok len=%u", (unsigned)length);
     } else {
         if (DTLS_NAT_TIMEOUT > 0 && (lwm2m_gettime() - connP->lastSend) > DTLS_NAT_TIMEOUT)
         {
@@ -621,18 +684,26 @@ int connection_send(dtls_connection_t *connP, uint8_t * buffer, size_t length){
             if ( connection_rehandshake(connP, false) != 0 )
             {
                 LOG("connection_send: rehandshake error");
+                ESP_LOGW(TAG, "connection_send rehandshake failed len=%u", (unsigned)length);
                 return -1;
             }
+            ESP_LOGI(TAG, "connection_send rehandshake completed");
         }
         if (-1 == dtls_write(connP->dtlsContext, connP->dtlsSession, buffer, length)) {
+            ESP_LOGW(TAG, "connection_send dtls_write failed len=%u", (unsigned)length);
             return -1;
         }
+        ESP_LOGI(TAG, "connection_send DTLS write queued len=%u", (unsigned)length);
     }
 
     return 0;
 }
 
 int connection_handle_packet(dtls_connection_t *connP, uint8_t * buffer, size_t numBytes){
+
+    log_connection_endpoint("connection_handle_packet", connP);
+    ESP_LOGI(TAG, "connection_handle_packet bytes=%u secure=%u", (unsigned)numBytes,
+             (unsigned)(connP && connP->dtlsSession != NULL));
 
     if (connP->dtlsSession != NULL)
     {
@@ -682,17 +753,26 @@ uint8_t lwm2m_buffer_send(void * sessionH,
 {
     dtls_connection_t * connP = (dtls_connection_t*) sessionH;
 
+    (void)userdata;
+
     if (connP == NULL)
     {
         LOG_ARG("#> failed sending %zu bytes, missing connection\r\n", length);
+        ESP_LOGW(TAG, "lwm2m_buffer_send failed: missing connection len=%u", (unsigned)length);
         return COAP_500_INTERNAL_SERVER_ERROR ;
     }
+
+    ESP_LOGI(TAG, "lwm2m_buffer_send start len=%u", (unsigned)length);
+    log_connection_endpoint("lwm2m_buffer_send endpoint", connP);
 
     if (-1 == connection_send(connP, buffer, length))
     {
         LOG_ARG("#> failed sending %zu bytes\r\n", length);
+        ESP_LOGW(TAG, "lwm2m_buffer_send failed len=%u", (unsigned)length);
         return COAP_500_INTERNAL_SERVER_ERROR ;
     }
+
+    ESP_LOGI(TAG, "lwm2m_buffer_send success len=%u", (unsigned)length);
 
     return COAP_NO_ERROR;
 }

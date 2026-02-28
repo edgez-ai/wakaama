@@ -79,6 +79,16 @@ lwm2m_context_t * lwm2m_init(void * userData)
 }
 
 #ifdef LWM2M_CLIENT_MODE
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+static const char *LWM2M_CORE_TAG = "wakaama_core";
+#define LWM2M_CORE_LOGI(...) ESP_LOGI(LWM2M_CORE_TAG, __VA_ARGS__)
+#define LWM2M_CORE_LOGW(...) ESP_LOGW(LWM2M_CORE_TAG, __VA_ARGS__)
+#else
+#define LWM2M_CORE_LOGI(...) do {} while (0)
+#define LWM2M_CORE_LOGW(...) do {} while (0)
+#endif
+
 void lwm2m_deregister(lwm2m_context_t * context)
 {
     lwm2m_server_t * server = context->serverList;
@@ -396,7 +406,9 @@ next_step:
     switch (contextP->state)
     {
     case STATE_INITIAL:
+        LWM2M_CORE_LOGI("lwm2m_step STATE_INITIAL endpoint=%s", contextP->endpointName ? contextP->endpointName : "(null)");
         if (0 != prv_refreshServerList(contextP)) {
+            LWM2M_CORE_LOGW("lwm2m_step prv_refreshServerList failed");
             LOG("503");
             return COAP_503_SERVICE_UNAVAILABLE;
         }
@@ -455,18 +467,24 @@ next_step:
 #endif
     case STATE_REGISTER_REQUIRED:
     {
+        LWM2M_CORE_LOGI("lwm2m_step entering STATE_REGISTER_REQUIRED");
         int result = registration_start(contextP, true);
+        LWM2M_CORE_LOGI("lwm2m_step registration_start result=%d", result);
         if (COAP_NO_ERROR != result) return result;
         contextP->state = STATE_REGISTERING;
+        LWM2M_CORE_LOGI("lwm2m_step state -> STATE_REGISTERING");
     }
     break;
 
     case STATE_REGISTERING:
     {
-        switch (registration_getStatus(contextP))
+        lwm2m_status_t regStatus = registration_getStatus(contextP);
+        LWM2M_CORE_LOGI("lwm2m_step STATE_REGISTERING regStatus=%d", regStatus);
+        switch (regStatus)
         {
         case STATE_REGISTERED:
             contextP->state = STATE_READY;
+            LWM2M_CORE_LOGI("lwm2m_step state -> STATE_READY");
             break;
 
         case STATE_REG_FAILED:
@@ -485,8 +503,12 @@ next_step:
     break;
 
     case STATE_READY:
-        if (registration_getStatus(contextP) == STATE_REG_FAILED)
+    {
+        lwm2m_status_t regStatus = registration_getStatus(contextP);
+        LWM2M_CORE_LOGI("lwm2m_step STATE_READY regStatus=%d", regStatus);
+        if (regStatus == STATE_REG_FAILED)
         {
+            LWM2M_CORE_LOGW("lwm2m_step READY but REG_FAILED, forcing REGISTER_REQUIRED");
             // TODO avoid infinite loop by checking the bootstrap info is different
             LOG("Registration failed from READY state, retrying instead of restarting...");
             // esp_restart(); // DISABLED: Restart is too aggressive, just retry registration
@@ -495,6 +517,7 @@ next_step:
             break;
         }
         break;
+    }
 
     default:
         // do nothing

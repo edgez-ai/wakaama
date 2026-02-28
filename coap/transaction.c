@@ -107,6 +107,16 @@ Contains code snippets which are:
 
 #include "internals.h"
 
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+static const char *WAKAAMA_TX_TAG = "wakaama_tx";
+#define WAKAAMA_TX_LOGI(...) ESP_LOGI(WAKAAMA_TX_TAG, __VA_ARGS__)
+#define WAKAAMA_TX_LOGW(...) ESP_LOGW(WAKAAMA_TX_TAG, __VA_ARGS__)
+#else
+#define WAKAAMA_TX_LOGI(...) do {} while (0)
+#define WAKAAMA_TX_LOGW(...) do {} while (0)
+#endif
+
 
 /*
  * Modulo mask (+1 and +0.5 for rounding) for a random number to get the tick number for the random
@@ -373,9 +383,11 @@ int transaction_send(lwm2m_context_t * contextP,
     LOG_ARG("Entering: transaction=%p", transacP);
     if (transacP->buffer == NULL)
     {
+          WAKAAMA_TX_LOGI("transaction_send: preparing buffer mid=%u peer=%p", transacP->mID, transacP->peerH);
         transacP->buffer_len = coap_serialize_get_size(transacP->message);
         if (transacP->buffer_len == 0)
         {
+              WAKAAMA_TX_LOGW("transaction_send: serialize_get_size returned 0 mid=%u", transacP->mID);
            transaction_remove(contextP, transacP);
            return COAP_500_INTERNAL_SERVER_ERROR;
         }
@@ -383,6 +395,7 @@ int transaction_send(lwm2m_context_t * contextP,
         transacP->buffer = (uint8_t*)lwm2m_malloc(transacP->buffer_len);
         if (transacP->buffer == NULL)
         {
+              WAKAAMA_TX_LOGW("transaction_send: malloc failed for buffer len=%u mid=%u", transacP->buffer_len, transacP->mID);
            transaction_remove(contextP, transacP);
            return COAP_500_INTERNAL_SERVER_ERROR;
         }
@@ -390,6 +403,7 @@ int transaction_send(lwm2m_context_t * contextP,
         transacP->buffer_len = coap_serialize_message(transacP->message, transacP->buffer);
         if (transacP->buffer_len == 0)
         {
+            WAKAAMA_TX_LOGW("transaction_send: coap_serialize_message returned 0 mid=%u", transacP->mID);
             lwm2m_free(transacP->buffer);
             transacP->buffer = NULL;
             transaction_remove(contextP, transacP);
@@ -421,13 +435,16 @@ int transaction_send(lwm2m_context_t * contextP,
 
         if (COAP_MAX_RETRANSMIT + 1 >= transacP->retrans_counter)
         {
-            (void)lwm2m_buffer_send(transacP->peerH, transacP->buffer, transacP->buffer_len, contextP->userData);
+            uint8_t send_rc = lwm2m_buffer_send(transacP->peerH, transacP->buffer, transacP->buffer_len, contextP->userData);
+            WAKAAMA_TX_LOGI("transaction_send: mid=%u len=%u rc=%u attempt=%u", transacP->mID,
+                            transacP->buffer_len, send_rc, transacP->retrans_counter);
 
             transacP->retrans_time += timeout;
             transacP->retrans_counter += 1;
         }
         else
         {
+            WAKAAMA_TX_LOGW("transaction_send: max retrans reached mid=%u counter=%u", transacP->mID, transacP->retrans_counter);
             maxRetriesReached = true;
         }
     }
@@ -442,6 +459,7 @@ int transaction_send(lwm2m_context_t * contextP,
 
     return 0;
 error:
+    WAKAAMA_TX_LOGW("transaction_send: removing transaction mid=%u", transacP->mID);
     if (transacP->callback)
     {
         LOG_ARG("transaction %p expired..calling callback", transacP);
@@ -467,6 +485,8 @@ void transaction_step(lwm2m_context_t * contextP,
 
         if (transacP->retrans_time <= currentTime)
         {
+            WAKAAMA_TX_LOGI("transaction_step: due mid=%u now=%ld retrans_time=%ld", transacP->mID,
+                            (long)currentTime, (long)transacP->retrans_time);
             removed = transaction_send(contextP, transacP);
         }
 

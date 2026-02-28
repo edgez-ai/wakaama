@@ -63,6 +63,7 @@
 #include <limits.h>
 #ifdef ESP_PLATFORM
 #include "esp_sleep.h"
+#include "esp_log.h"
 #endif
 
 #define MAX_LOCATION_LENGTH 10      // strlen("/rd/65534") + 1
@@ -70,6 +71,15 @@
 #ifdef LWM2M_CLIENT_MODE
 extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
+
+#ifdef ESP_PLATFORM
+static const char *WAKAAMA_REG_TAG = "wakaama_reg";
+#define WAKAAMA_REG_LOGI(...) ESP_LOGI(WAKAAMA_REG_TAG, __VA_ARGS__)
+#define WAKAAMA_REG_LOGW(...) ESP_LOGW(WAKAAMA_REG_TAG, __VA_ARGS__)
+#else
+#define WAKAAMA_REG_LOGI(...) do {} while (0)
+#define WAKAAMA_REG_LOGW(...) do {} while (0)
+#endif
 
 static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
                                           lwm2m_server_t * server)
@@ -827,11 +837,13 @@ static uint8_t prv_register(lwm2m_context_t * contextP,
 
     if (server->sessionH == NULL)
     {
+        WAKAAMA_REG_LOGI("prv_register: connecting server shortID=%u secInst=%u", server->shortID, server->secObjInstID);
         server->sessionH = lwm2m_connect_server(server->secObjInstID, contextP->userData);
     }
 
     if (NULL == server->sessionH)
     {
+        WAKAAMA_REG_LOGW("prv_register: connect failed shortID=%u secInst=%u", server->shortID, server->secObjInstID);
         lwm2m_free(payload);
         lwm2m_free(query);
         return COAP_503_SERVICE_UNAVAILABLE;
@@ -872,7 +884,9 @@ static uint8_t prv_register(lwm2m_context_t * contextP,
     transaction->userData = (void *) dataP;
 
     contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transaction);
-    if (transaction_send(contextP, transaction) != 0)
+    int send_result = transaction_send(contextP, transaction);
+    WAKAAMA_REG_LOGI("prv_register: transaction_send result=%d shortID=%u", send_result, server->shortID);
+    if (send_result != 0)
     {
         return COAP_503_SERVICE_UNAVAILABLE;
     }
@@ -1051,6 +1065,7 @@ uint8_t registration_start(lwm2m_context_t * contextP, bool restartFailed)
 #endif
 
     LOG_ARG("State: %s", STR_STATE(contextP->state));
+    WAKAAMA_REG_LOGI("registration_start: restartFailed=%u", (unsigned)restartFailed);
 
 #ifndef LWM2M_VERSION_1_0
     serverObjP = (lwm2m_object_t*)LWM2M_LIST_FIND(contextP->objectList, LWM2M_SERVER_OBJECT_ID);
@@ -1063,6 +1078,7 @@ uint8_t registration_start(lwm2m_context_t * contextP, bool restartFailed)
     targetP = contextP->serverList;
     while (targetP != NULL && result == COAP_NO_ERROR)
     {
+        WAKAAMA_REG_LOGI("registration_start: server shortID=%u status=%d sessionH=%p", targetP->shortID, targetP->status, targetP->sessionH);
         if (targetP->status == STATE_DEREGISTERED
          || (restartFailed && targetP->status == STATE_REG_FAILED))
         {
@@ -1086,6 +1102,7 @@ uint8_t registration_start(lwm2m_context_t * contextP, bool restartFailed)
                 else
                 {
                     result = prv_startRegistration(contextP, targetP, serverObjP);
+                    WAKAAMA_REG_LOGI("registration_start: prv_startRegistration result=%d shortID=%u", result, targetP->shortID);
                 }
             }
 #else
@@ -1099,6 +1116,7 @@ uint8_t registration_start(lwm2m_context_t * contextP, bool restartFailed)
     if (firstOrdered)
     {
         result = prv_startRegistration(contextP, firstOrdered, serverObjP);
+        WAKAAMA_REG_LOGI("registration_start: firstOrdered shortID=%u result=%d", firstOrdered->shortID, result);
     }
 #endif
 
@@ -1123,6 +1141,7 @@ lwm2m_status_t registration_getStatus(lwm2m_context_t * contextP)
 
     while (targetP != NULL)
     {
+        WAKAAMA_REG_LOGI("registration_getStatus: shortID=%u status=%d", targetP->shortID, targetP->status);
         LOG_ARG("%d status: %s", targetP->shortID, STR_STATUS(targetP->status));
         switch (targetP->status)
         {
