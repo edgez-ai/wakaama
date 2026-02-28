@@ -1141,7 +1141,6 @@ lwm2m_status_t registration_getStatus(lwm2m_context_t * contextP)
 
     while (targetP != NULL)
     {
-        WAKAAMA_REG_LOGI("registration_getStatus: shortID=%u status=%d", targetP->shortID, targetP->status);
         LOG_ARG("%d status: %s", targetP->shortID, STR_STATUS(targetP->status));
         switch (targetP->status)
         {

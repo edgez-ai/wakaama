@@ -505,7 +505,6 @@ next_step:
     case STATE_READY:
     {
         lwm2m_status_t regStatus = registration_getStatus(contextP);
-        LWM2M_CORE_LOGI("lwm2m_step STATE_READY regStatus=%d", regStatus);
         if (regStatus == STATE_REG_FAILED)
         {
             LWM2M_CORE_LOGW("lwm2m_step READY but REG_FAILED, forcing REGISTER_REQUIRED");
