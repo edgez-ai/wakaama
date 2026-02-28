@@ -479,7 +479,6 @@ next_step:
     case STATE_REGISTERING:
     {
         lwm2m_status_t regStatus = registration_getStatus(contextP);
-        LWM2M_CORE_LOGI("lwm2m_step STATE_REGISTERING regStatus=%d", regStatus);
         switch (regStatus)
         {
         case STATE_REGISTERED:
