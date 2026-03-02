@@ -1074,7 +1074,7 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
 {
     int index;
     size_t head;
-    uint8_t bufferJSON[PRV_JSON_BUFFER_SIZE];
+    uint8_t *bufferJSON;
     uint8_t baseUriStr[URI_MAX_STRING_LEN];
     int baseUriLen;
     uri_depth_t rootLevel;
@@ -1088,24 +1088,39 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
     LOG_URI(uriP);
     if (size != 0 && tlvP == NULL) return -1;
 
+    bufferJSON = (uint8_t *)lwm2m_malloc(PRV_JSON_BUFFER_SIZE);
+    if (bufferJSON == NULL) return -1;
+
     baseUriLen = lwm2m_uriToString(uriP, baseUriStr, URI_MAX_STRING_LEN, &baseLevel);
-    if (baseUriLen < 0) return -1;
+    if (baseUriLen < 0) {
+        lwm2m_free(bufferJSON);
+        return -1;
+    }
     if (baseUriLen > 1
      && baseLevel != URI_DEPTH_RESOURCE
      && baseLevel != URI_DEPTH_RESOURCE_INSTANCE)
     {
-        if (baseUriLen >= URI_MAX_STRING_LEN -1) return 0;
+        if (baseUriLen >= URI_MAX_STRING_LEN -1) {
+            lwm2m_free(bufferJSON);
+            return 0;
+        }
         baseUriStr[baseUriLen++] = '/';
     }
 
     num = json_findAndCheckData(uriP, baseLevel, size, tlvP, &targetP, &rootLevel);
-    if (num < 0) return -1;
+    if (num < 0) {
+        lwm2m_free(bufferJSON);
+        return -1;
+    }
 
     if (baseLevel < rootLevel
      && baseUriLen > 1
      && baseUriStr[baseUriLen - 1] != '/')
     {
-        if (baseUriLen >= URI_MAX_STRING_LEN -1) return 0;
+        if (baseUriLen >= URI_MAX_STRING_LEN -1) {
+            lwm2m_free(bufferJSON);
+            return 0;
+        }
         baseUriStr[baseUriLen++] = '/';
     }
 
@@ -1125,7 +1140,10 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
 
         if (index != 0)
         {
-            if (head + 1 > PRV_JSON_BUFFER_SIZE) return 0;
+            if (head + 1 > PRV_JSON_BUFFER_SIZE) {
+                lwm2m_free(bufferJSON);
+                return 0;
+            }
             bufferJSON[head++] = JSON_SEPARATOR;
         }
 
@@ -1139,20 +1157,28 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
                                 &baseNameOutput,
                                 bufferJSON + head,
                                 PRV_JSON_BUFFER_SIZE - head);
-        if (res < 0) return res;
+        if (res < 0) {
+            lwm2m_free(bufferJSON);
+            return res;
+        }
         head += res;
     }
 
-    if (head + 1 > PRV_JSON_BUFFER_SIZE) return 0;
+    if (head + 1 > PRV_JSON_BUFFER_SIZE) {
+        lwm2m_free(bufferJSON);
+        return 0;
+    }
     bufferJSON[head++] = JSON_FOOTER;
 
     fprintf(stderr, "[DBG] SENML JSON: malloc(%zu) for final buffer\r\n", head);
     *bufferP = (uint8_t *)lwm2m_malloc(head);
     if (*bufferP == NULL) {
         fprintf(stderr, "[DBG] SENML JSON: malloc FAILED\r\n");
+        lwm2m_free(bufferJSON);
         return -1;
     }
     memcpy(*bufferP, bufferJSON, head);
+    lwm2m_free(bufferJSON);
     fprintf(stderr, "[DBG] SENML JSON: success, returning %zu bytes\r\n", head);
 
     return head;
