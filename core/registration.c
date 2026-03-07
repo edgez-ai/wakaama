@@ -1832,6 +1832,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         lwm2m_client_object_t * objects;
         lwm2m_media_type_t format;
         lwm2m_client_t * clientP;
+        uint32_t previousSampleVersion = 0;
+        bool hadExistingClient = false;
         char location[MAX_LOCATION_LENGTH];
 
         if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion, &sampleVersionSet))
@@ -1906,6 +1908,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (clientP != NULL)
             {
                 // we reset this registration
+                hadExistingClient = true;
+                previousSampleVersion = clientP->sampleConfigVersion;
                 lwm2m_free(clientP->name);
                 if (clientP->msisdn != NULL) lwm2m_free(clientP->msisdn);
                 if (clientP->altPath != NULL) lwm2m_free(clientP->altPath);
@@ -1929,7 +1933,18 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             }
             clientP->name = name;
             clientP->version = version;
-            clientP->sampleConfigVersion = sampleVersion;
+            if (sampleVersionSet)
+            {
+                clientP->sampleConfigVersion = sampleVersion;
+            }
+            else if (hadExistingClient)
+            {
+                clientP->sampleConfigVersion = previousSampleVersion;
+            }
+            else
+            {
+                clientP->sampleConfigVersion = 0;
+            }
             clientP->binding = binding;
             clientP->msisdn = msisdn;
             clientP->altPath = altPath;
