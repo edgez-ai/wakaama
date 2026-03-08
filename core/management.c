@@ -723,10 +723,10 @@ int prv_lwm2m_dm_create(lwm2m_context_t * contextP,
 
     format = clientP->format;
 #ifdef LWM2M_SUPPORT_TLV
-    /* TODO: JSON formats currently require the object instance to be specified.
-     * Use TLV instead until that is fixed. */
-    if (format != LWM2M_CONTENT_TLV
-     && (size > 1 || dataP[0].type != LWM2M_TYPE_OBJECT_INSTANCE))
+    /* CREATE interoperability: use TLV for all CREATE operations.
+     * Non-TLV formats (e.g. SenML/JSON) can lose object-instance semantics
+     * when URI has no instance, causing client-side 4.00 on create. */
+    if (format != LWM2M_CONTENT_TLV)
     {
         format = LWM2M_CONTENT_TLV;
     }
@@ -782,10 +782,10 @@ int lwm2m_dm_create_with_identity(lwm2m_context_t * contextP,
 
     format = clientP->format;
 #ifdef LWM2M_SUPPORT_TLV
-    /* TODO: JSON formats currently require the object instance to be specified.
-     * Use TLV instead until that is fixed. */
-    if (format != LWM2M_CONTENT_TLV
-     && (numData > 1 || dataP[0].type != LWM2M_TYPE_OBJECT_INSTANCE))
+    /* CREATE interoperability: use TLV for all CREATE operations.
+     * Non-TLV formats (e.g. SenML/JSON) can lose object-instance semantics
+     * when URI has no instance, causing client-side 4.00 on create. */
+    if (format != LWM2M_CONTENT_TLV)
     {
         format = LWM2M_CONTENT_TLV;
     }
