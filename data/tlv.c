@@ -385,7 +385,7 @@ int tlv_parse(const uint8_t * buffer,
             (*dataP)[size].value.asChildren.count = tlv_parse(buffer + index + dataIndex,
                                                           dataLen,
                                                           &((*dataP)[size].value.asChildren.array));
-            if ((*dataP)[size].value.asChildren.count == 0)
+            if ((*dataP)[size].value.asChildren.count == 0 && dataLen != 0)
             {
                 lwm2m_data_free(size + 1, *dataP);
                 return 0;
