@@ -193,12 +193,23 @@ void prv_deleteTransactionList(lwm2m_context_t * context)
     }
 }
 
-void lwm2m_close(lwm2m_context_t * contextP)
+static void prv_lwm2m_close_internal(lwm2m_context_t * contextP, bool withDeregister)
 {
+#ifndef LWM2M_CLIENT_MODE
+    (void)withDeregister;
+#endif
+
 #ifdef LWM2M_CLIENT_MODE
 
     LOG("Entering");
-    lwm2m_deregister(contextP);
+    if (withDeregister)
+    {
+        lwm2m_deregister(contextP);
+    }
+    else
+    {
+        LWM2M_CORE_LOGI("Closing LwM2M context without de-registration");
+    }
     prv_deleteServerList(contextP);
     prv_deleteBootstrapServerList(contextP);
     prv_deleteObservedList(contextP);
@@ -228,6 +239,16 @@ void lwm2m_close(lwm2m_context_t * contextP)
 
     prv_deleteTransactionList(contextP);
     lwm2m_free(contextP);
+}
+
+void lwm2m_close(lwm2m_context_t * contextP)
+{
+    prv_lwm2m_close_internal(contextP, true);
+}
+
+void lwm2m_close_without_deregister(lwm2m_context_t * contextP)
+{
+    prv_lwm2m_close_internal(contextP, false);
 }
 
 #ifdef LWM2M_CLIENT_MODE

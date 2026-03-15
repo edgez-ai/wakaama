@@ -820,6 +820,8 @@ struct _lwm2m_context_
 lwm2m_context_t * lwm2m_init(void * userData);
 // close a liblwm2m context.
 void lwm2m_close(lwm2m_context_t * contextP);
+// close a liblwm2m context without sending de-registration.
+void lwm2m_close_without_deregister(lwm2m_context_t * contextP);
 
 // perform any required pending operation and adjust timeoutP to the maximal time interval to wait in seconds.
 int lwm2m_step(lwm2m_context_t * contextP, time_t * timeoutP);
