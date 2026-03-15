@@ -23,6 +23,7 @@
 #include <time.h>
 #ifdef ESP_PLATFORM
 #include "esp_heap_caps.h"
+#include "esp_attr.h"
 #include <stdint.h>
 #endif
 
@@ -30,7 +31,7 @@
 #define LWM2M_LARGE_POOL_SLOTS 2
 #define LWM2M_LARGE_POOL_SIZE  (32 * 1024)
 
-static uint8_t s_lwm2m_large_pool[LWM2M_LARGE_POOL_SLOTS][LWM2M_LARGE_POOL_SIZE];
+static EXT_RAM_BSS_ATTR uint8_t s_lwm2m_large_pool[LWM2M_LARGE_POOL_SLOTS][LWM2M_LARGE_POOL_SIZE];
 static uint8_t s_lwm2m_large_pool_used[LWM2M_LARGE_POOL_SLOTS] = {0};
 
 static void *lwm2m_large_pool_alloc(size_t s)
