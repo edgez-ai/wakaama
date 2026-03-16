@@ -635,6 +635,14 @@ typedef struct
     uint8_t * payload;
 } registration_data_t;
 
+__attribute__((weak)) int lwm2m_server_build_registration_ack_payload(lwm2m_context_t *contextP,
+                                                                       const lwm2m_client_t *clientP,
+                                                                       uint32_t clientSampleVersion,
+                                                                       bool clientSampleVersionSet,
+                                                                       uint8_t *buffer,
+                                                                       size_t bufferSize,
+                                                                       size_t *outLen);
+
 static void prv_handleRegistrationReply(lwm2m_context_t * contextP,
                                         lwm2m_transaction_t * transacP,
                                         void * message)
@@ -1835,6 +1843,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         uint32_t previousSampleVersion = 0;
         bool hadExistingClient = false;
         char location[MAX_LOCATION_LENGTH];
+        uint8_t ackPayload[512] = {0};
+        size_t ackPayloadLen = 0;
 
         if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion, &sampleVersionSet))
         {
@@ -1965,6 +1975,20 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 return COAP_500_INTERNAL_SERVER_ERROR;
             }
 
+            if (lwm2m_server_build_registration_ack_payload != NULL &&
+                lwm2m_server_build_registration_ack_payload(contextP,
+                                                            clientP,
+                                                            sampleVersion,
+                                                            sampleVersionSet,
+                                                            ackPayload,
+                                                            sizeof(ackPayload),
+                                                            &ackPayloadLen) == 1 &&
+                ackPayloadLen > 0)
+            {
+                coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
+                coap_set_payload(response, ackPayload, ackPayloadLen);
+            }
+
             if (contextP->monitorCallback != NULL)
             {
                 contextP->monitorCallback(contextP, clientP->internalID, NULL, COAP_201_CREATED, NULL, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
@@ -2066,6 +2090,20 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (contextP->monitorCallback != NULL)
             {
                 contextP->monitorCallback(contextP, clientP->internalID, NULL, COAP_204_CHANGED, NULL, LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
+            }
+
+            if (lwm2m_server_build_registration_ack_payload != NULL &&
+                lwm2m_server_build_registration_ack_payload(contextP,
+                                                            clientP,
+                                                            sampleVersionSet ? sampleVersion : clientP->sampleConfigVersion,
+                                                            sampleVersionSet,
+                                                            ackPayload,
+                                                            sizeof(ackPayload),
+                                                            &ackPayloadLen) == 1 &&
+                ackPayloadLen > 0)
+            {
+                coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
+                coap_set_payload(response, ackPayload, ackPayloadLen);
             }
             result = COAP_204_CHANGED;
         }
