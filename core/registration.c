@@ -71,6 +71,7 @@
 #ifdef LWM2M_CLIENT_MODE
 extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
+__attribute__((weak)) int lwm2m_sample_apply_json_config(const uint8_t *json, size_t len);
 
 #ifdef ESP_PLATFORM
 static const char *WAKAAMA_REG_TAG = "wakaama_reg";
@@ -80,6 +81,23 @@ static const char *WAKAAMA_REG_TAG = "wakaama_reg";
 #define WAKAAMA_REG_LOGI(...) do {} while (0)
 #define WAKAAMA_REG_LOGW(...) do {} while (0)
 #endif
+
+static bool prv_payload_looks_like_json(const uint8_t *payload, size_t len)
+{
+    size_t i = 0;
+
+    if (!payload || len == 0)
+    {
+        return false;
+    }
+
+    while (i < len && (payload[i] == ' ' || payload[i] == '\t' || payload[i] == '\r' || payload[i] == '\n'))
+    {
+        i++;
+    }
+
+    return (i < len && payload[i] == '{');
+}
 
 static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
                                           lwm2m_server_t * server)
@@ -702,6 +720,23 @@ static void prv_handleRegistrationReply(lwm2m_context_t * contextP,
             }
             dataP->server->location = coap_get_multi_option_as_path_string(packet->location_path);
 
+            if (packet->payload != NULL &&
+                packet->payload_len > 0 &&
+                lwm2m_sample_apply_json_config != NULL &&
+                prv_payload_looks_like_json(packet->payload, packet->payload_len))
+            {
+                int rc = lwm2m_sample_apply_json_config(packet->payload, packet->payload_len);
+                if (rc == 0)
+                {
+                    WAKAAMA_REG_LOGI("Applied sample config from registration ACK payload (%u bytes)",
+                                     (unsigned)packet->payload_len);
+                }
+                else
+                {
+                    WAKAAMA_REG_LOGW("Failed to apply sample config from registration ACK payload: rc=%d", rc);
+                }
+            }
+
             LOG_ARG("%d Registration successful", dataP->server->shortID);
 #ifndef LWM2M_VERSION_1_0
             {
@@ -780,6 +815,22 @@ static void prv_handleRegistrationUpdateReply(lwm2m_context_t * contextP,
         if (packet != NULL && packet->code == COAP_204_CHANGED)
         {
             dataP->server->status = STATE_REGISTERED;
+            if (packet->payload != NULL &&
+                packet->payload_len > 0 &&
+                lwm2m_sample_apply_json_config != NULL &&
+                prv_payload_looks_like_json(packet->payload, packet->payload_len))
+            {
+                int rc = lwm2m_sample_apply_json_config(packet->payload, packet->payload_len);
+                if (rc == 0)
+                {
+                    WAKAAMA_REG_LOGI("Applied sample config from registration update ACK payload (%u bytes)",
+                                     (unsigned)packet->payload_len);
+                }
+                else
+                {
+                    WAKAAMA_REG_LOGW("Failed to apply sample config from registration update ACK payload: rc=%d", rc);
+                }
+            }
             LOG_ARG("%d Registration update successful", dataP->server->shortID);
         }
         else
