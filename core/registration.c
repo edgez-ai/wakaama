@@ -635,14 +635,6 @@ typedef struct
     uint8_t * payload;
 } registration_data_t;
 
-__attribute__((weak)) int lwm2m_server_build_registration_ack_payload(lwm2m_context_t *contextP,
-                                                                       const lwm2m_client_t *clientP,
-                                                                       uint32_t clientSampleVersion,
-                                                                       bool clientSampleVersionSet,
-                                                                       uint8_t *buffer,
-                                                                       size_t bufferSize,
-                                                                       size_t *outLen);
-
 static void prv_handleRegistrationReply(lwm2m_context_t * contextP,
                                         lwm2m_transaction_t * transacP,
                                         void * message)
@@ -1190,6 +1182,14 @@ void registration_deregister(lwm2m_context_t * contextP,
 #endif
 
 #ifdef LWM2M_SERVER_MODE
+__attribute__((weak)) int lwm2m_server_build_registration_ack_payload(lwm2m_context_t *contextP,
+                                                                       const lwm2m_client_t *clientP,
+                                                                       uint32_t clientSampleVersion,
+                                                                       bool clientSampleVersionSet,
+                                                                       uint8_t *buffer,
+                                                                       size_t bufferSize,
+                                                                       size_t *outLen);
+
 static void prv_freeClientObjectList(lwm2m_client_object_t * objects)
 {
     while (objects != NULL)
