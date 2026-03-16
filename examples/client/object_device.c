@@ -107,6 +107,10 @@ typedef struct _device_instance_
 } device_instance_t;
 
 static void (*s_factory_reset_cb)(void) = NULL;
+static void (*s_reboot_cb)(void) = NULL;
+void lwm2m_device_set_reboot_cb(void (*cb)(void)) {
+    s_reboot_cb = cb;
+}
 void lwm2m_device_set_factory_reset_cb(void (*cb)(void)) {
     s_factory_reset_cb = cb;
 }
@@ -714,7 +718,13 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
             fprintf(stdout, " (with params: %.*s)", length, (char*)buffer);
         }
         fprintf(stdout, "\r\n\n");
-        g_reboot = 1;
+        if (s_reboot_cb) {
+            DEVICE_LOGI("Reboot execute received; invoking callback");
+            s_reboot_cb();
+        } else {
+            g_reboot = 1;
+            DEVICE_LOGI("Reboot callback not set; falling back to legacy g_reboot flag");
+        }
         return COAP_204_CHANGED;
     case RES_O_FACTORY_RESET:
         fprintf(stdout, "\n\t FACTORY RESET");
