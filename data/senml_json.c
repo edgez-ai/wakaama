@@ -30,7 +30,7 @@
 #error SenML JSON not supported with LWM2M 1.0
 #endif
 
-#define PRV_JSON_BUFFER_SIZE 10240
+#define PRV_JSON_BUFFER_SIZE 65536
 
 #define JSON_FALSE_STRING                 "false"
 #define JSON_FALSE_STRING_SIZE            5
