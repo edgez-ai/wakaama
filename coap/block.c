@@ -189,6 +189,15 @@ static uint8_t prv_coap_raw_block_handler(lwm2m_block_data_t **pBlockDataHead, b
     }
     else
     {
+        /* If this was a single-block RAW transfer (blockNum == 0) we can
+         * forward the provided buffer directly via the hook. For multi-block
+         * RAW transfers, higher-level code must assemble payloads.
+         */
+        if (blockNum == 0 && buffer != NULL && length > 0) {
+            fprintf(stderr, "[DBG-SRV] block1 raw complete uri=%s len=%zu\n", identifier.uri ? identifier.uri : "(null)", length);
+            edgez_on_block1_complete(identifier.uri, buffer, length);
+        }
+
         prv_block_data_delete(pBlockDataHead, identifier, blockType);
 
         return NO_ERROR;
@@ -278,6 +287,7 @@ static uint8_t prv_coap_block_handler(lwm2m_block_data_t **pBlockDataHead, block
         *outputBuffer = blockData->blockBuffer;
 
         /* Notify example/server if they want to act on completed Block1 payloads. */
+        fprintf(stderr, "[DBG-SRV] block1 complete uri=%s len=%zu\n", blockData->identifier.uri ? blockData->identifier.uri : "(null)", blockData->blockBufferSize);
         edgez_on_block1_complete(blockData->identifier.uri, blockData->blockBuffer, blockData->blockBufferSize);
 
         return NO_ERROR;
