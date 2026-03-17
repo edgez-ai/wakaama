@@ -47,6 +47,12 @@
 #include <string.h>
 #include <stdio.h>
 
+/* weak hook called when a Block1 transfer completes. Examples may implement
+ * this to forward large opaque payloads (eg. camera images) to other systems.
+ * Signature: void edgez_on_block1_complete(const char *uri, const uint8_t *buf, size_t len)
+ */
+__attribute__((weak)) void edgez_on_block1_complete(const char *uri, const uint8_t *buf, size_t len) {}
+
 // the maximum payload transferred by block we accumulate per transfer
 #ifndef MAX_BLOCK_SIZE
 #define MAX_BLOCK_SIZE 4096
@@ -270,6 +276,9 @@ static uint8_t prv_coap_block_handler(lwm2m_block_data_t **pBlockDataHead, block
         // we don't free it to be able to send retransmission
         *outputLength = blockData->blockBufferSize;
         *outputBuffer = blockData->blockBuffer;
+
+        /* Notify example/server if they want to act on completed Block1 payloads. */
+        edgez_on_block1_complete(blockData->identifier.uri, blockData->blockBuffer, blockData->blockBufferSize);
 
         return NO_ERROR;
     }
