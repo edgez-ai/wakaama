@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 
 /* weak hook called when a Block1 transfer completes. Examples may implement
  * this to forward large opaque payloads (eg. camera images) to other systems.
@@ -61,10 +62,19 @@ __attribute__((weak)) void edgez_on_block1_complete(const char *uri, const uint8
     
 bool prv_matchBlock1 (block_data_identifier_t identifier, lwm2m_block_data_t * blockData)
     {
+    uintptr_t identifier_addr = (uintptr_t)identifier.uri;
+    uintptr_t block_uri_addr = (uintptr_t)blockData->identifier.uri;
+
     if (blockData->identifier.uri == NULL || identifier.uri == NULL)
     {
         return false;
     }
+
+    if (identifier_addr < (uintptr_t)0x10000 || block_uri_addr < (uintptr_t)0x10000)
+    {
+        return false;
+    }
+
     return strcmp(identifier.uri, blockData->identifier.uri) == 0;
 }
     
