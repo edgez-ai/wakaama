@@ -1844,6 +1844,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         bool hadExistingClient = false;
         char location[MAX_LOCATION_LENGTH];
         uint8_t ackPayload[512] = {0};
+        uint8_t *ackPayloadCopy = NULL;
         size_t ackPayloadLen = 0;
 
         if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion, &sampleVersionSet))
@@ -1985,8 +1986,13 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                                                             &ackPayloadLen) == 1 &&
                 ackPayloadLen > 0)
             {
-                coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
-                coap_set_payload(response, ackPayload, ackPayloadLen);
+                ackPayloadCopy = (uint8_t *)lwm2m_malloc(ackPayloadLen);
+                if (ackPayloadCopy != NULL)
+                {
+                    memcpy(ackPayloadCopy, ackPayload, ackPayloadLen);
+                    coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
+                    coap_set_payload(response, ackPayloadCopy, ackPayloadLen);
+                }
             }
 
             if (contextP->monitorCallback != NULL)
@@ -2102,8 +2108,13 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                                                             &ackPayloadLen) == 1 &&
                 ackPayloadLen > 0)
             {
-                coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
-                coap_set_payload(response, ackPayload, ackPayloadLen);
+                ackPayloadCopy = (uint8_t *)lwm2m_malloc(ackPayloadLen);
+                if (ackPayloadCopy != NULL)
+                {
+                    memcpy(ackPayloadCopy, ackPayload, ackPayloadLen);
+                    coap_set_header_content_type(response, (coap_content_type_t)LWM2M_CONTENT_TEXT);
+                    coap_set_payload(response, ackPayloadCopy, ackPayloadLen);
+                }
             }
             result = COAP_204_CHANGED;
         }
