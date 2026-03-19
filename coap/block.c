@@ -91,10 +91,14 @@ lwm2m_block_data_t * find_block_data(lwm2m_block_data_t * blockDataHead,
     bool (* match) (block_data_identifier_t, lwm2m_block_data_t *) = prv_get_matcher(blockType);
     lwm2m_block_data_t * blockData = blockDataHead;
     
-    while(blockData != NULL && !match(identifier, blockData))
+    while (blockData != NULL)
     {
+        if (blockData->blockType == blockType && match(identifier, blockData))
+        {
+            break;
+        }
         blockData = blockData->next;
-}
+    }
 
     return blockData;
 }
