@@ -68,6 +68,9 @@
 // Logging helper: use ESP-IDF logging if available, fallback to printf otherwise
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #define DEVICE_LOGI(fmt, ...) ESP_LOGI("LWM2M_DEVICE", fmt, ##__VA_ARGS__)
 #else
 #define DEVICE_LOGI(fmt, ...) do { printf("[LWM2M_DEVICE] " fmt "\n", ##__VA_ARGS__); } while (0)
@@ -114,6 +117,17 @@ void lwm2m_device_set_reboot_cb(void (*cb)(void)) {
 void lwm2m_device_set_factory_reset_cb(void (*cb)(void)) {
     s_factory_reset_cb = cb;
 }
+
+#ifdef ESP_PLATFORM
+static void prv_reboot_task(void *arg)
+{
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(300));
+    DEVICE_LOGI("Executing deferred reboot via esp_restart()");
+    esp_restart();
+    vTaskDelete(NULL);
+}
+#endif
 
 // Resource Id's:
 #define RES_O_MANUFACTURER          0
@@ -722,8 +736,24 @@ static uint8_t prv_device_execute(lwm2m_context_t *contextP,
             DEVICE_LOGI("Reboot execute received; invoking callback");
             s_reboot_cb();
         } else {
+#ifdef ESP_PLATFORM
+            BaseType_t task_created = xTaskCreate(
+                prv_reboot_task,
+                "lwm2m_reboot",
+                2048,
+                NULL,
+                tskIDLE_PRIORITY + 1,
+                NULL);
+            if (task_created == pdPASS) {
+                DEVICE_LOGI("Reboot callback not set; scheduled deferred esp_restart() fallback");
+            } else {
+                g_reboot = 1;
+                DEVICE_LOGI("Reboot callback not set; failed to schedule reboot task, falling back to g_reboot flag");
+            }
+#else
             g_reboot = 1;
             DEVICE_LOGI("Reboot callback not set; falling back to legacy g_reboot flag");
+#endif
         }
         return COAP_204_CHANGED;
     case RES_O_FACTORY_RESET:
