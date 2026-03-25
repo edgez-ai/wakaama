@@ -69,6 +69,7 @@
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
 #include "esp_system.h"
+#include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #define DEVICE_LOGI(fmt, ...) ESP_LOGI("LWM2M_DEVICE", fmt, ##__VA_ARGS__)
@@ -77,10 +78,31 @@
 #endif
 
 
+#ifdef ESP_PLATFORM
+#if defined(CONFIG_LWM2M_DEVICE_MANUFACTURER)
+#define PRV_MANUFACTURER      CONFIG_LWM2M_DEVICE_MANUFACTURER
+#else
+#define PRV_MANUFACTURER      "Open Mobile Alliance"
+#endif
+
+#if defined(CONFIG_LWM2M_DEVICE_MODEL)
+#define PRV_MODEL_NUMBER      CONFIG_LWM2M_DEVICE_MODEL
+#else
+#define PRV_MODEL_NUMBER      "Lightweight M2M Client"
+#endif
+
+#if defined(CONFIG_LWM2M_DEVICE_FIRMWARE_VERSION)
+#define PRV_FIRMWARE_VERSION  CONFIG_LWM2M_DEVICE_FIRMWARE_VERSION
+#else
+#define PRV_FIRMWARE_VERSION  "1.0"
+#endif
+#else
 #define PRV_MANUFACTURER      "Open Mobile Alliance"
 #define PRV_MODEL_NUMBER      "Lightweight M2M Client"
-#define PRV_SERIAL_NUMBER     "345000123"
 #define PRV_FIRMWARE_VERSION  "1.0"
+#endif
+
+#define PRV_SERIAL_NUMBER     "345000123"
 #define PRV_POWER_SOURCE_1    1
 #define PRV_POWER_SOURCE_2    5
 #define PRV_POWER_VOLTAGE_1   3800
@@ -106,7 +128,7 @@ typedef struct _device_instance_
     int64_t time;
     char serial_number[32];
     char time_offset[8];
-    char firmware_version[16]; // allow per-instance firmware version (was global macro)
+    char firmware_version[64];
 } device_instance_t;
 
 static void (*s_factory_reset_cb)(void) = NULL;
