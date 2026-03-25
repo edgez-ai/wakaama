@@ -126,9 +126,12 @@ typedef struct _device_instance_
     int64_t free_memory;
     int64_t error;
     int64_t time;
+    char manufacturer[64];
+    char model_number[64];
     char serial_number[32];
     char time_offset[8];
     char firmware_version[64];
+    char software_version[64];
 } device_instance_t;
 
 static void (*s_factory_reset_cb)(void) = NULL;
@@ -229,14 +232,14 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
     {
     case RES_O_MANUFACTURER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_string(PRV_MANUFACTURER, dataP);
-        DEVICE_LOGI("inst=%u READ MANUFACTURER=%s", devDataP->instanceId, PRV_MANUFACTURER);
+        lwm2m_data_encode_string(devDataP->manufacturer, dataP);
+        DEVICE_LOGI("inst=%u READ MANUFACTURER=%s", devDataP->instanceId, devDataP->manufacturer);
         return COAP_205_CONTENT;
 
     case RES_O_MODEL_NUMBER:
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
-        lwm2m_data_encode_string(PRV_MODEL_NUMBER, dataP);
-        DEVICE_LOGI("inst=%u READ MODEL_NUMBER=%s", devDataP->instanceId, PRV_MODEL_NUMBER);
+        lwm2m_data_encode_string(devDataP->model_number, dataP);
+        DEVICE_LOGI("inst=%u READ MODEL_NUMBER=%s", devDataP->instanceId, devDataP->model_number);
         return COAP_205_CONTENT;
 
     case RES_O_SERIAL_NUMBER:
@@ -250,6 +253,12 @@ static uint8_t prv_set_value(lwm2m_data_t * dataP,
         if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
         lwm2m_data_encode_string(devDataP->firmware_version, dataP);
         DEVICE_LOGI("inst=%u READ FIRMWARE_VERSION=%s", devDataP->instanceId, devDataP->firmware_version);
+        return COAP_205_CONTENT;
+
+    case RES_O_SOFTWARE_VERSION:
+        if (dataP->type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+        lwm2m_data_encode_string(devDataP->software_version, dataP);
+        DEVICE_LOGI("inst=%u READ SOFTWARE_VERSION=%s", devDataP->instanceId, devDataP->software_version);
         return COAP_205_CONTENT;
 
     case RES_M_REBOOT:
@@ -468,6 +477,7 @@ static uint8_t prv_device_read(lwm2m_context_t *contextP,
                 RES_O_MODEL_NUMBER,
                 RES_O_SERIAL_NUMBER,
                 RES_O_FIRMWARE_VERSION,
+                RES_O_SOFTWARE_VERSION,
                 //E: RES_M_REBOOT,
                 //E: RES_O_FACTORY_RESET,
                 RES_O_AVL_POWER_SOURCES,
@@ -533,6 +543,7 @@ static uint8_t prv_device_discover(lwm2m_context_t *contextP,
             RES_O_MODEL_NUMBER,
             RES_O_SERIAL_NUMBER,
             RES_O_FIRMWARE_VERSION,
+            RES_O_SOFTWARE_VERSION,
             RES_M_REBOOT,
             RES_O_FACTORY_RESET,
             RES_O_AVL_POWER_SOURCES,
@@ -567,6 +578,7 @@ static uint8_t prv_device_discover(lwm2m_context_t *contextP,
             case RES_O_MODEL_NUMBER:
             case RES_O_SERIAL_NUMBER:
             case RES_O_FIRMWARE_VERSION:
+            case RES_O_SOFTWARE_VERSION:
             case RES_M_REBOOT:
             case RES_O_FACTORY_RESET:
             case RES_O_AVL_POWER_SOURCES:
@@ -965,9 +977,15 @@ uint8_t device_add_instance(lwm2m_object_t * objectP, uint16_t instanceId)
     targetP->free_memory = PRV_MEMORY_FREE;
     targetP->error = PRV_ERROR_CODE;
     targetP->time = 1367491215;
+    strncpy(targetP->manufacturer, PRV_MANUFACTURER, sizeof(targetP->manufacturer)-1);
+    targetP->manufacturer[sizeof(targetP->manufacturer)-1] = '\0';
+    strncpy(targetP->model_number, PRV_MODEL_NUMBER, sizeof(targetP->model_number)-1);
+    targetP->model_number[sizeof(targetP->model_number)-1] = '\0';
     strcpy(targetP->time_offset, "+01:00");
     strncpy(targetP->firmware_version, PRV_FIRMWARE_VERSION, sizeof(targetP->firmware_version)-1);
     targetP->firmware_version[sizeof(targetP->firmware_version)-1] = '\0';
+    strncpy(targetP->software_version, PRV_FIRMWARE_VERSION, sizeof(targetP->software_version)-1);
+    targetP->software_version[sizeof(targetP->software_version)-1] = '\0';
     
     // Add to instance list
     objectP->instanceList = LWM2M_LIST_ADD(objectP->instanceList, targetP);
@@ -1049,13 +1067,41 @@ uint8_t device_update_instance_string(lwm2m_object_t * objectP, uint16_t instanc
     
     switch (resourceId)
     {
+    case RES_O_MANUFACTURER:
+        if (value != NULL && strlen(value) < sizeof(targetP->manufacturer))
+        {
+            strcpy(targetP->manufacturer, value);
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
+    case RES_O_MODEL_NUMBER:
+        if (value != NULL && strlen(value) < sizeof(targetP->model_number))
+        {
+            strcpy(targetP->model_number, value);
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
     case RES_O_SERIAL_NUMBER:
         if (value != NULL && strlen(value) < sizeof(targetP->serial_number))
         {
             strcpy(targetP->serial_number, value);
             return COAP_204_CHANGED;
         }
-        return COAP_204_CHANGED;
+        return COAP_400_BAD_REQUEST;
+    case RES_O_FIRMWARE_VERSION:
+        if (value != NULL && strlen(value) < sizeof(targetP->firmware_version))
+        {
+            strcpy(targetP->firmware_version, value);
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
+    case RES_O_SOFTWARE_VERSION:
+        if (value != NULL && strlen(value) < sizeof(targetP->software_version))
+        {
+            strcpy(targetP->software_version, value);
+            return COAP_204_CHANGED;
+        }
+        return COAP_400_BAD_REQUEST;
     case RES_O_UTC_OFFSET:
         if (value != NULL && strlen(value) < sizeof(targetP->time_offset))
         {
