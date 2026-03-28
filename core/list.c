@@ -23,7 +23,16 @@ lwm2m_list_t * lwm2m_list_add(lwm2m_list_t * head,
 {
     lwm2m_list_t * target;
 
+    if (NULL == node) return head;
+
+    if (node->next == node)
+    {
+        node->next = NULL;
+    }
+
     if (NULL == head) return node;
+
+    if (head == node) return head;
 
     if (head->id > node->id)
     {
@@ -34,7 +43,16 @@ lwm2m_list_t * lwm2m_list_add(lwm2m_list_t * head,
     target = head;
     while (NULL != target->next && target->next->id < node->id)
     {
+        if (target->next == node)
+        {
+            return head;
+        }
         target = target->next;
+    }
+
+    if (target == node || target->next == node)
+    {
+        return head;
     }
 
     node->next = target->next;
