@@ -963,7 +963,11 @@ int lwm2m_send(lwm2m_context_t *contextP, uint16_t shortServerID, lwm2m_uri_t *u
 
         coap_set_header_uri_path(transactionP->message, "/" URI_SEND_SEGMENT);
         coap_set_header_content_type(transactionP->message, format);
-        coap_set_payload(transactionP->message, buffer, length);
+        if (!transaction_set_payload(transactionP, buffer, (size_t)length)) {
+            transaction_free(transactionP);
+            ret = COAP_500_INTERNAL_SERVER_ERROR;
+            break;
+        }
 
         transactionP->callback = callback;
         transactionP->userData = userData;
@@ -976,7 +980,6 @@ int lwm2m_send(lwm2m_context_t *contextP, uint16_t shortServerID, lwm2m_uri_t *u
         } else {
             LOG_ARG("transaction_send failed for %d: 0x%02X!", targetP->shortID, ret);
         }
-        coap_set_payload(transactionP->message, NULL, 0); // Clear the payload
         if (shortServerID != 0)
             break;
     }

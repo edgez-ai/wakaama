@@ -345,19 +345,31 @@ static int prv_send_new_block1(lwm2m_context_t * contextP, lwm2m_transaction_t *
     lwm2m_transaction_t * next;
     // Done sending block
     if (block_num * (size_t)block_size >= previous->payload_len)
+    {
+        LOG_ARG("Blockwise TX complete: all blocks queued payload_len=%u block_num=%u block_size=%u",
+                (unsigned)previous->payload_len, (unsigned)block_num, (unsigned)block_size);
         return 0;
+    }
 
     next = prv_create_next_block_transaction(previous, contextP->nextMID++);
     if (next == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
 
     size_t remaining_payload_length = next->payload_len - block_num * (size_t)block_size;
     uint8_t *new_block_start = next->payload + block_num * block_size;
+        size_t chunk_len = MIN(block_size, remaining_payload_length);
+        bool has_more = remaining_payload_length > block_size;
 
-    coap_set_header_block1(next->message, block_num, remaining_payload_length > block_size, block_size);
-    coap_set_payload(next->message, new_block_start, MIN(block_size, remaining_payload_length));
+        LOG_ARG("Blockwise TX: mid=%u block_num=%u block_size=%u chunk_len=%u remaining=%u more=%u payload_total=%u",
+            next->mID, (unsigned)block_num, (unsigned)block_size, (unsigned)chunk_len,
+            (unsigned)remaining_payload_length, has_more ? 1 : 0, (unsigned)next->payload_len);
+
+        coap_set_header_block1(next->message, block_num, has_more, block_size);
+        coap_set_payload(next->message, new_block_start, chunk_len);
 
     contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, next);
-    return transaction_send(contextP, next);
+        int send_rc = transaction_send(contextP, next);
+        LOG_ARG("Blockwise TX: transaction_send mid=%u block_num=%u rc=%d", next->mID, (unsigned)block_num, send_rc);
+        return send_rc;
 }
 
 static int prv_send_next_block1(lwm2m_context_t * contextP, void * sessionH, uint16_t mid, uint16_t block_size)
@@ -382,6 +394,9 @@ static int prv_send_next_block1(lwm2m_context_t * contextP, void * sessionH, uin
     {
         block_num = message->block1_num + 1;
     }
+
+    LOG_ARG("Blockwise TX next requested: ack_mid=%u current_block_num=%u requested_block_size=%u next_block_num=%u",
+            mid, (unsigned)message->block1_num, (unsigned)block_size, (unsigned)block_num);
     
     return prv_send_new_block1(contextP, transaction, block_num, block_size);
 }
@@ -754,21 +769,43 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
                     uint16_t block_size;
 
                     coap_get_header_block1(message, &block_num, NULL, &block_size, NULL);
+                    LOG_ARG("Blockwise ACK RX: mid=%u code=%u.%02u block_num=%u block_size=%u",
+                            message->mid,
+                            message->code >> 5,
+                            message->code & 0x1F,
+                            (unsigned)block_num,
+                            (unsigned)block_size);
 
                     switch (message->code) {
                         case COAP_201_CREATED:
                         case COAP_204_CHANGED:
-                        case COAP_231_CONTINUE:
-                            prv_send_next_block1(contextP, fromSessionH, message->mid, block_size);
+                        case COAP_231_CONTINUE: {
+                            int next_rc = prv_send_next_block1(contextP, fromSessionH, message->mid, block_size);
+                            LOG_ARG("Blockwise ACK RX: next block dispatch rc=%d (mid=%u block_num=%u)",
+                                    next_rc, message->mid, (unsigned)block_num);
                             break;
+                        }
                         case COAP_413_ENTITY_TOO_LARGE:
                             // resend with smaller block size as specified in the block 1 option
                             if (block_num > 0) break;
-                            prv_retry_block1(contextP, fromSessionH, message->mid, block_size);
+                            {
+                                int retry_rc = prv_retry_block1(contextP, fromSessionH, message->mid, block_size);
+                                LOG_ARG("Blockwise ACK RX: retry with smaller block size rc=%d (mid=%u size=%u)",
+                                        retry_rc, message->mid, (unsigned)block_size);
+                            }
                         default:
                             break;
                     }
                     
+                    transaction_handleResponse(contextP, fromSessionH, message, NULL);
+                } else if (!IS_OPTION(message, COAP_OPTION_BLOCK2)) {
+                    lwm2m_transaction_t *transaction = prv_get_transaction(contextP, fromSessionH, message->mid);
+                    if (transaction != NULL) {
+                        coap_packet_t *request = (coap_packet_t *)transaction->message;
+                        if (request != NULL && IS_OPTION(request, COAP_OPTION_BLOCK1)) {
+                        }
+                    }
+
                     transaction_handleResponse(contextP, fromSessionH, message, NULL);
                 } else if (IS_OPTION(message, COAP_OPTION_BLOCK2)) {
 #ifdef LWM2M_CLIENT_MODE
