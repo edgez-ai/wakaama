@@ -1246,7 +1246,8 @@ int prv_lwm2m_observe(lwm2m_context_t * contextP,
     lwm2m_result_callback_t callback,
     void * userData,
     const uint8_t *identity,
-    size_t identityLen)
+    size_t identityLen,
+    uint32_t timeoutSec)
 {
     lwm2m_client_t * clientP;
     lwm2m_transaction_t * transactionP;
@@ -1314,6 +1315,15 @@ int prv_lwm2m_observe(lwm2m_context_t * contextP,
     transactionP->callback = prv_obsRequestCallback;
     transactionP->userData = (void *)observationData;
 
+    if (timeoutSec > 0)
+    {
+        time_t now = lwm2m_gettime();
+        if (now >= 0)
+        {
+            transactionP->retrans_deadline = now + (time_t)timeoutSec;
+        }
+    }
+
     contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transactionP);
 
     // update the user latest intention
@@ -1340,7 +1350,27 @@ int lwm2m_observe(lwm2m_context_t * contextP,
                              callback,
                  userData,
                  NULL,
+                 0,
                  0);
+}
+
+int lwm2m_observe_with_identity_timeout(lwm2m_context_t * contextP,
+    uint16_t clientID,
+    lwm2m_uri_t * uriP,
+    lwm2m_result_callback_t callback,
+    void * userData,
+    const uint8_t *identity,
+    size_t identityLen,
+    uint32_t timeoutSec)
+{
+    return prv_lwm2m_observe(contextP,
+                 clientID,
+                 uriP,
+                 callback,
+                 userData,
+                 identity,
+                 identityLen,
+                 timeoutSec);
 }
 
 int lwm2m_observe_with_identity(lwm2m_context_t * contextP,
@@ -1351,13 +1381,14 @@ int lwm2m_observe_with_identity(lwm2m_context_t * contextP,
     const uint8_t *identity,
     size_t identityLen)
 {
-    return prv_lwm2m_observe(contextP,
-                 clientID,
-                 uriP,
-                 callback,
-                 userData,
-                 identity,
-                 identityLen);
+    return lwm2m_observe_with_identity_timeout(contextP,
+                                               clientID,
+                                               uriP,
+                                               callback,
+                                               userData,
+                                               identity,
+                                               identityLen,
+                                               0);
 }
 
 static

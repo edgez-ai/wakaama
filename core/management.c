@@ -405,6 +405,43 @@ uint8_t dm_handleRequest(lwm2m_context_t * contextP,
 
 #ifdef LWM2M_SERVER_MODE
 
+int lwm2m_dm_read_with_identity_timeout(lwm2m_context_t * contextP,
+                                        uint16_t clientID,
+                                        lwm2m_uri_t * uriP,
+                                        lwm2m_result_callback_t callback,
+                                        void * userData,
+                                        const uint8_t *identity,
+                                        size_t identityLen,
+                                        uint32_t timeoutSec);
+int lwm2m_dm_write_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                         lwm2m_media_type_t format, uint8_t *buffer, size_t length, bool partialUpdate,
+                                         lwm2m_result_callback_t callback, void *userData,
+                                         const uint8_t *identity, size_t identityLen,
+                                         uint32_t timeoutSec);
+int lwm2m_dm_execute_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                           lwm2m_media_type_t format, uint8_t *buffer, size_t length,
+                                           lwm2m_result_callback_t callback, void *userData,
+                                           const uint8_t *identity, size_t identityLen,
+                                           uint32_t timeoutSec);
+int lwm2m_dm_create_with_identity_timeout(lwm2m_context_t * contextP,
+                                          uint16_t clientID,
+                                          lwm2m_uri_t * uriP,
+                                          int numData,
+                                          lwm2m_data_t * dataP,
+                                          lwm2m_result_callback_t callback,
+                                          void * userData,
+                                          const uint8_t *identity,
+                                          size_t identityLen,
+                                          uint32_t timeoutSec);
+int lwm2m_dm_delete_with_identity_timeout(lwm2m_context_t * contextP,
+                                          uint16_t clientID,
+                                          lwm2m_uri_t * uriP,
+                                          lwm2m_result_callback_t callback,
+                                          void * userData,
+                                          const uint8_t *identity,
+                                          size_t identityLen,
+                                          uint32_t timeoutSec);
+
 #define ID_AS_STRING_MAX_LEN 8
 
 static void prv_resultCallback(lwm2m_context_t * contextP,
@@ -491,7 +528,8 @@ static void prv_resultCallback(lwm2m_context_t * contextP,
 static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, coap_method_t method,
                              lwm2m_media_type_t format, uint8_t *buffer, size_t length,
                              lwm2m_result_callback_t callback, void *userData,
-                             const uint8_t *identity, size_t identityLen) {
+                             const uint8_t *identity, size_t identityLen,
+                             uint32_t timeoutSec) {
     lwm2m_client_t * clientP;
     lwm2m_transaction_t * transaction;
     dm_data_t * dataP;
@@ -541,6 +579,15 @@ static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m
         transaction->userData = (void *)dataP;
     }
 
+    if (timeoutSec > 0)
+    {
+        time_t now = lwm2m_gettime();
+        if (now >= 0)
+        {
+            transaction->retrans_deadline = now + (time_t)timeoutSec;
+        }
+    }
+
     contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transaction);
 
     return transaction_send(contextP, transaction);
@@ -566,7 +613,8 @@ int prv_lwm2m_dm_read(lwm2m_context_t * contextP,
                              clientP->format,
                              NULL, 0,
                              callback, userData,
-                             NULL, 0);
+                             NULL, 0,
+                             0);
 }
 
 int lwm2m_dm_read(lwm2m_context_t * contextP,
@@ -586,6 +634,21 @@ int lwm2m_dm_read_with_identity(lwm2m_context_t * contextP,
                                 const uint8_t *identity,
                                 size_t identityLen)
 {
+    return lwm2m_dm_read_with_identity_timeout(contextP, clientID, uriP,
+                                               callback, userData,
+                                               identity, identityLen,
+                                               0);
+}
+
+int lwm2m_dm_read_with_identity_timeout(lwm2m_context_t * contextP,
+                                        uint16_t clientID,
+                                        lwm2m_uri_t * uriP,
+                                        lwm2m_result_callback_t callback,
+                                        void * userData,
+                                        const uint8_t *identity,
+                                        size_t identityLen,
+                                        uint32_t timeoutSec)
+{
     lwm2m_client_t * clientP;
 
     LOG_ARG_DBG("clientID: %d", clientID);
@@ -599,7 +662,8 @@ int lwm2m_dm_read_with_identity(lwm2m_context_t * contextP,
                              clientP->format,
                              NULL, 0,
                              callback, userData,
-                             identity, identityLen);
+                             identity, identityLen,
+                             timeoutSec);
 }
 
 static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
@@ -619,12 +683,14 @@ static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2
                                   COAP_PUT,
                                   format, buffer, length,
                                   callback, userData,
-                                  NULL, 0);
+                                  NULL, 0,
+                                  0);
     }
     else
     {
         return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
-                                 NULL, 0);
+                                 NULL, 0,
+                                 0);
     }
 }
 
@@ -638,6 +704,18 @@ int lwm2m_dm_write_with_identity(lwm2m_context_t *contextP, uint16_t clientID, l
                                  lwm2m_media_type_t format, uint8_t *buffer, size_t length, bool partialUpdate,
                                  lwm2m_result_callback_t callback, void *userData,
                                  const uint8_t *identity, size_t identityLen) {
+    return lwm2m_dm_write_with_identity_timeout(contextP, clientID, uriP,
+                                                format, buffer, length, partialUpdate,
+                                                callback, userData,
+                                                identity, identityLen,
+                                                0);
+}
+
+int lwm2m_dm_write_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                         lwm2m_media_type_t format, uint8_t *buffer, size_t length, bool partialUpdate,
+                                         lwm2m_result_callback_t callback, void *userData,
+                                         const uint8_t *identity, size_t identityLen,
+                                         uint32_t timeoutSec) {
     coap_method_t method = partialUpdate ? COAP_POST : COAP_PUT;
 
     LOG_ARG_DBG("clientID: %d, format: %s, length: %zd", clientID, STR_MEDIA_TYPE(format), length);
@@ -652,12 +730,14 @@ int lwm2m_dm_write_with_identity(lwm2m_context_t *contextP, uint16_t clientID, l
                                  COAP_PUT,
                                  format, buffer, length,
                                  callback, userData,
-                                 identity, identityLen);
+                                 identity, identityLen,
+                                 timeoutSec);
     }
     else
     {
         return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
-                                 identity, identityLen);
+                                 identity, identityLen,
+                                 timeoutSec);
     }
 }
 
@@ -674,13 +754,26 @@ int lwm2m_dm_execute(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *
                               COAP_POST,
                               format, buffer, length,
                               callback, userData,
-                              NULL, 0);
+                              NULL, 0,
+                              0);
 }
 
 int lwm2m_dm_execute_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
                                    lwm2m_media_type_t format, uint8_t *buffer, size_t length,
                                    lwm2m_result_callback_t callback, void *userData,
                                    const uint8_t *identity, size_t identityLen) {
+    return lwm2m_dm_execute_with_identity_timeout(contextP, clientID, uriP,
+                                                  format, buffer, length,
+                                                  callback, userData,
+                                                  identity, identityLen,
+                                                  0);
+}
+
+int lwm2m_dm_execute_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
+                                           lwm2m_media_type_t format, uint8_t *buffer, size_t length,
+                                           lwm2m_result_callback_t callback, void *userData,
+                                           const uint8_t *identity, size_t identityLen,
+                                           uint32_t timeoutSec) {
     LOG_ARG_DBG("clientID: %d, format: %s, length: %zd", clientID, STR_MEDIA_TYPE(format), length);
     LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
     if (!LWM2M_URI_IS_SET_RESOURCE(uriP))
@@ -692,7 +785,8 @@ int lwm2m_dm_execute_with_identity(lwm2m_context_t *contextP, uint16_t clientID,
                               COAP_POST,
                               format, buffer, length,
                               callback, userData,
-                              identity, identityLen);
+                              identity, identityLen,
+                              timeoutSec);
 }
 
 static
@@ -739,7 +833,8 @@ int prv_lwm2m_dm_create(lwm2m_context_t * contextP,
                               COAP_POST,
                               format, buffer, length,
                               callback, userData,
-                              NULL, 0);
+                              NULL, 0,
+                              0);
 }
 
 int lwm2m_dm_create(lwm2m_context_t * contextP,
@@ -762,6 +857,24 @@ int lwm2m_dm_create_with_identity(lwm2m_context_t * contextP,
                                   void * userData,
                                   const uint8_t *identity,
                                   size_t identityLen)
+{
+    return lwm2m_dm_create_with_identity_timeout(contextP, clientID, uriP,
+                                                 numData, dataP,
+                                                 callback, userData,
+                                                 identity, identityLen,
+                                                 0);
+}
+
+int lwm2m_dm_create_with_identity_timeout(lwm2m_context_t * contextP,
+                                          uint16_t clientID,
+                                          lwm2m_uri_t * uriP,
+                                          int numData,
+                                          lwm2m_data_t * dataP,
+                                          lwm2m_result_callback_t callback,
+                                          void * userData,
+                                          const uint8_t *identity,
+                                          size_t identityLen,
+                                          uint32_t timeoutSec)
 {
     uint8_t * buffer;
     int length;
@@ -798,7 +911,8 @@ int lwm2m_dm_create_with_identity(lwm2m_context_t * contextP,
                               COAP_POST,
                               format, buffer, length,
                               callback, userData,
-                              identity, identityLen);
+                              identity, identityLen,
+                              timeoutSec);
 }
 
 int lwm2m_dm_delete(lwm2m_context_t * contextP,
@@ -819,7 +933,8 @@ int lwm2m_dm_delete(lwm2m_context_t * contextP,
                               COAP_DELETE,
                               LWM2M_CONTENT_TEXT, NULL, 0,
                               callback, userData,
-                              NULL, 0);
+                              NULL, 0,
+                              0);
 }
 
 int lwm2m_dm_delete_with_identity(lwm2m_context_t * contextP,
@@ -829,6 +944,21 @@ int lwm2m_dm_delete_with_identity(lwm2m_context_t * contextP,
                                   void * userData,
                                   const uint8_t *identity,
                                   size_t identityLen)
+{
+    return lwm2m_dm_delete_with_identity_timeout(contextP, clientID, uriP,
+                                                 callback, userData,
+                                                 identity, identityLen,
+                                                 0);
+}
+
+int lwm2m_dm_delete_with_identity_timeout(lwm2m_context_t * contextP,
+                                          uint16_t clientID,
+                                          lwm2m_uri_t * uriP,
+                                          lwm2m_result_callback_t callback,
+                                          void * userData,
+                                          const uint8_t *identity,
+                                          size_t identityLen,
+                                          uint32_t timeoutSec)
 {
     LOG_ARG_DBG("clientID: %d", clientID);
     LOG_ARG_DBG("%s", LOG_URI_TO_STRING(uriP));
@@ -842,7 +972,8 @@ int lwm2m_dm_delete_with_identity(lwm2m_context_t * contextP,
                               COAP_DELETE,
                               LWM2M_CONTENT_TEXT, NULL, 0,
                               callback, userData,
-                              identity, identityLen);
+                              identity, identityLen,
+                              timeoutSec);
 }
 
 int lwm2m_dm_write_attributes(lwm2m_context_t * contextP,

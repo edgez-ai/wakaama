@@ -398,6 +398,7 @@ int transaction_send(lwm2m_context_t * contextP,
                      lwm2m_transaction_t * transacP)
 {
     bool maxRetriesReached = false;
+    time_t now = lwm2m_gettime();
 
     LOG_ARG_DBG("Entering: transaction=%p", (void *)transacP);
     if (transacP->buffer == NULL)
@@ -428,6 +429,12 @@ int transaction_send(lwm2m_context_t * contextP,
 
     if (!transacP->ack_received)
     {
+        if (transacP->retrans_deadline > 0 && now >= transacP->retrans_deadline)
+        {
+            maxRetriesReached = true;
+            goto error;
+        }
+
         long unsigned timeout = 0;
 
         if (0 == transacP->retrans_counter)
@@ -454,6 +461,11 @@ int transaction_send(lwm2m_context_t * contextP,
 
             transacP->retrans_time += timeout;
             transacP->retrans_counter += 1;
+
+            if (transacP->retrans_deadline > 0 && transacP->retrans_time > transacP->retrans_deadline)
+            {
+                transacP->retrans_time = transacP->retrans_deadline;
+            }
         }
         else
         {

@@ -760,6 +760,7 @@ struct _lwm2m_transaction_
     uint8_t ack_received; // indicates, that the ACK was received
     uint8_t  retrans_counter;
     time_t   retrans_time;
+    time_t   retrans_deadline; // 0 means no explicit retransmission deadline
     void * message;
     uint16_t buffer_len;
     uint8_t * buffer;
@@ -923,6 +924,10 @@ int lwm2m_dm_read(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * u
 int lwm2m_dm_read_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                 lwm2m_result_callback_t callback, void * userData,
                                 const uint8_t *identity, size_t identityLen);
+int lwm2m_dm_read_with_identity_timeout(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
+                                        lwm2m_result_callback_t callback, void * userData,
+                                        const uint8_t *identity, size_t identityLen,
+                                        uint32_t timeoutSec);
 int lwm2m_dm_discover(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_dm_discover_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                     lwm2m_result_callback_t callback, void * userData,
@@ -933,6 +938,10 @@ int lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *ur
 int lwm2m_dm_write_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, lwm2m_media_type_t format,
                                  uint8_t *buffer, size_t length, bool partialUpdate, lwm2m_result_callback_t callback,
                                  void *userData, const uint8_t *identity, size_t identityLen);
+int lwm2m_dm_write_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, lwm2m_media_type_t format,
+                                         uint8_t *buffer, size_t length, bool partialUpdate, lwm2m_result_callback_t callback,
+                                         void *userData, const uint8_t *identity, size_t identityLen,
+                                         uint32_t timeoutSec);
 int lwm2m_dm_write_attributes(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_attributes_t * attrP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_dm_write_attributes_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                             lwm2m_attributes_t * attrP, lwm2m_result_callback_t callback, void * userData,
@@ -942,20 +951,36 @@ int lwm2m_dm_execute(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *
 int lwm2m_dm_execute_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, lwm2m_media_type_t format,
                                    uint8_t *buffer, size_t length, lwm2m_result_callback_t callback, void *userData,
                                    const uint8_t *identity, size_t identityLen);
+int lwm2m_dm_execute_with_identity_timeout(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP, lwm2m_media_type_t format,
+                                           uint8_t *buffer, size_t length, lwm2m_result_callback_t callback, void *userData,
+                                           const uint8_t *identity, size_t identityLen,
+                                           uint32_t timeoutSec);
 int lwm2m_dm_create(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, int numData, lwm2m_data_t * dataP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_dm_create_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, int numData,
                                   lwm2m_data_t * dataP, lwm2m_result_callback_t callback, void * userData,
                                   const uint8_t *identity, size_t identityLen);
+int lwm2m_dm_create_with_identity_timeout(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, int numData,
+                                          lwm2m_data_t * dataP, lwm2m_result_callback_t callback, void * userData,
+                                          const uint8_t *identity, size_t identityLen,
+                                          uint32_t timeoutSec);
 int lwm2m_dm_delete(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_dm_delete_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                   lwm2m_result_callback_t callback, void * userData,
                                   const uint8_t *identity, size_t identityLen);
+int lwm2m_dm_delete_with_identity_timeout(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
+                                          lwm2m_result_callback_t callback, void * userData,
+                                          const uint8_t *identity, size_t identityLen,
+                                          uint32_t timeoutSec);
 
 // Information Reporting APIs
 int lwm2m_observe(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_observe_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                 lwm2m_result_callback_t callback, void * userData,
                                 const uint8_t *identity, size_t identityLen);
+int lwm2m_observe_with_identity_timeout(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
+                                        lwm2m_result_callback_t callback, void * userData,
+                                        const uint8_t *identity, size_t identityLen,
+                                        uint32_t timeoutSec);
 int lwm2m_observe_cancel(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP, lwm2m_result_callback_t callback, void * userData);
 int lwm2m_observe_cancel_with_identity(lwm2m_context_t * contextP, uint16_t clientID, lwm2m_uri_t * uriP,
                                        lwm2m_result_callback_t callback, void * userData,
