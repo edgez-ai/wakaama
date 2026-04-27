@@ -173,6 +173,7 @@ lwm2m_transaction_t * transaction_new(void * sessionH,
     coap_init_message(transacP->message, COAP_TYPE_CON, method, mID);
 
     transacP->peerH = sessionH;
+    transacP->max_retransmit = COAP_MAX_RETRANSMIT;
 
     transacP->mID = mID;
 
@@ -357,7 +358,7 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
                         message_send(contextP, response, fromSessionH);
                     }
 
-                    if ((COAP_401_UNAUTHORIZED == message->code) && (COAP_MAX_RETRANSMIT > transacP->retrans_counter))
+                    if ((COAP_401_UNAUTHORIZED == message->code) && (transacP->max_retransmit > transacP->retrans_counter))
                     {
                         transacP->ack_received = false;
                         transacP->retrans_time += COAP_RESPONSE_TIMEOUT;
@@ -455,7 +456,7 @@ int transaction_send(lwm2m_context_t * contextP,
             timeout = COAP_RESPONSE_TIMEOUT << (transacP->retrans_counter - 1);
         }
 
-        if (COAP_MAX_RETRANSMIT + 1 >= transacP->retrans_counter)
+        if (transacP->max_retransmit + 1 >= transacP->retrans_counter)
         {
             (void)lwm2m_buffer_send(transacP->peerH, transacP->buffer, transacP->buffer_len, contextP->userData);
 
@@ -469,6 +470,11 @@ int transaction_send(lwm2m_context_t * contextP,
         }
         else
         {
+            if (transacP->retrans_deadline > 0 && now < transacP->retrans_deadline)
+            {
+                transacP->retrans_time = transacP->retrans_deadline;
+                return 0;
+            }
             maxRetriesReached = true;
         }
     }

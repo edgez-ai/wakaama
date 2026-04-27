@@ -760,6 +760,7 @@ struct _lwm2m_transaction_
     uint8_t ack_received; // indicates, that the ACK was received
     uint8_t  retrans_counter;
     time_t   retrans_time;
+    uint8_t  max_retransmit; // per-transaction retry cap
     time_t   retrans_deadline; // 0 means no explicit retransmission deadline
     void * message;
     uint16_t buffer_len;

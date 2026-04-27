@@ -529,7 +529,8 @@ static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m
                              lwm2m_media_type_t format, uint8_t *buffer, size_t length,
                              lwm2m_result_callback_t callback, void *userData,
                              const uint8_t *identity, size_t identityLen,
-                             uint32_t timeoutSec) {
+                             uint32_t timeoutSec,
+                             int noRetransmit) {
     lwm2m_client_t * clientP;
     lwm2m_transaction_t * transaction;
     dm_data_t * dataP;
@@ -588,6 +589,11 @@ static int prv_makeOperation(lwm2m_context_t *contextP, uint16_t clientID, lwm2m
         }
     }
 
+    if (noRetransmit)
+    {
+        transaction->max_retransmit = 0;
+    }
+
     contextP->transactionList = (lwm2m_transaction_t *)LWM2M_LIST_ADD(contextP->transactionList, transaction);
 
     return transaction_send(contextP, transaction);
@@ -614,6 +620,7 @@ int prv_lwm2m_dm_read(lwm2m_context_t * contextP,
                              NULL, 0,
                              callback, userData,
                              NULL, 0,
+                             0,
                              0);
 }
 
@@ -663,7 +670,8 @@ int lwm2m_dm_read_with_identity_timeout(lwm2m_context_t * contextP,
                              NULL, 0,
                              callback, userData,
                              identity, identityLen,
-                             timeoutSec);
+                             timeoutSec,
+                             0);
 }
 
 static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
@@ -684,12 +692,14 @@ static int prv_lwm2m_dm_write(lwm2m_context_t *contextP, uint16_t clientID, lwm2
                                   format, buffer, length,
                                   callback, userData,
                                   NULL, 0,
+                                  0,
                                   0);
     }
     else
     {
         return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
                                  NULL, 0,
+                                 0,
                                  0);
     }
 }
@@ -731,13 +741,15 @@ int lwm2m_dm_write_with_identity_timeout(lwm2m_context_t *contextP, uint16_t cli
                                  format, buffer, length,
                                  callback, userData,
                                  identity, identityLen,
-                                 timeoutSec);
+                                 timeoutSec,
+                                 0);
     }
     else
     {
         return prv_makeOperation(contextP, clientID, uriP, method, format, buffer, length, callback, userData,
                                  identity, identityLen,
-                                 timeoutSec);
+                                 timeoutSec,
+                                 0);
     }
 }
 
@@ -755,7 +767,8 @@ int lwm2m_dm_execute(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *
                               format, buffer, length,
                               callback, userData,
                               NULL, 0,
-                              0);
+                              0,
+                              1);
 }
 
 int lwm2m_dm_execute_with_identity(lwm2m_context_t *contextP, uint16_t clientID, lwm2m_uri_t *uriP,
@@ -786,7 +799,8 @@ int lwm2m_dm_execute_with_identity_timeout(lwm2m_context_t *contextP, uint16_t c
                               format, buffer, length,
                               callback, userData,
                               identity, identityLen,
-                              timeoutSec);
+                              timeoutSec,
+                              1);
 }
 
 static
@@ -834,6 +848,7 @@ int prv_lwm2m_dm_create(lwm2m_context_t * contextP,
                               format, buffer, length,
                               callback, userData,
                               NULL, 0,
+                              0,
                               0);
 }
 
@@ -912,7 +927,8 @@ int lwm2m_dm_create_with_identity_timeout(lwm2m_context_t * contextP,
                               format, buffer, length,
                               callback, userData,
                               identity, identityLen,
-                              timeoutSec);
+                              timeoutSec,
+                              0);
 }
 
 int lwm2m_dm_delete(lwm2m_context_t * contextP,
@@ -934,6 +950,7 @@ int lwm2m_dm_delete(lwm2m_context_t * contextP,
                               LWM2M_CONTENT_TEXT, NULL, 0,
                               callback, userData,
                               NULL, 0,
+                              0,
                               0);
 }
 
@@ -973,7 +990,8 @@ int lwm2m_dm_delete_with_identity_timeout(lwm2m_context_t * contextP,
                               LWM2M_CONTENT_TEXT, NULL, 0,
                               callback, userData,
                               identity, identityLen,
-                              timeoutSec);
+                              timeoutSec,
+                              0);
 }
 
 int lwm2m_dm_write_attributes(lwm2m_context_t * contextP,
