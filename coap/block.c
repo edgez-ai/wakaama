@@ -300,9 +300,17 @@ static uint8_t prv_coap_block_handler(lwm2m_block_data_t **pBlockDataHead, block
         *outputLength = blockData->blockBufferSize;
         *outputBuffer = blockData->blockBuffer;
 
-        /* Notify example/server if they want to act on completed Block1 payloads. */
-        fprintf(stderr, "[DBG-SRV] block1 complete uri=%s len=%zu\n", blockData->identifier.uri ? blockData->identifier.uri : "(null)", blockData->blockBufferSize);
-        edgez_on_block1_complete(blockData->identifier.uri, blockData->blockBuffer, blockData->blockBufferSize);
+        /* Only Block1 transfers have URI identifiers and should trigger the Block1 hook. */
+        if (blockType == BLOCK_1)
+        {
+            fprintf(stderr,
+                    "[DBG-SRV] block1 complete uri=%s len=%zu\n",
+                    blockData->identifier.uri ? blockData->identifier.uri : "(null)",
+                    blockData->blockBufferSize);
+            edgez_on_block1_complete(blockData->identifier.uri,
+                                     blockData->blockBuffer,
+                                     blockData->blockBufferSize);
+        }
 
         return NO_ERROR;
     }
