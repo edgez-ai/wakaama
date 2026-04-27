@@ -104,6 +104,73 @@ static_assert(LWM2M_COAP_DEFAULT_BLOCK_SIZE == 16 || LWM2M_COAP_DEFAULT_BLOCK_SI
 
 uint16_t coap_block_size = LWM2M_COAP_DEFAULT_BLOCK_SIZE;
 
+static bool prv_copy_multi_option_segments(void *dst_packet,
+                                           const multi_option_t *src,
+                                           int (*set_segment)(void *, const char *))
+{
+    const multi_option_t *opt;
+
+    for (opt = src; opt != NULL; opt = opt->next)
+    {
+        size_t seg_len = opt->len;
+        char *segment = (char *)lwm2m_malloc(seg_len + 1);
+        if (segment == NULL)
+        {
+            return false;
+        }
+
+        if (seg_len > 0 && opt->data != NULL)
+        {
+            memcpy(segment, opt->data, seg_len);
+        }
+        segment[seg_len] = '\0';
+
+        set_segment(dst_packet, segment);
+        lwm2m_free(segment);
+    }
+
+    return true;
+}
+
+static bool prv_copy_location_path_option(void *dst_packet, const multi_option_t *src)
+{
+    const multi_option_t *opt;
+    size_t total_len = 0;
+    size_t offset = 0;
+    char *path;
+
+    for (opt = src; opt != NULL; opt = opt->next)
+    {
+        total_len += 1 + opt->len;
+    }
+
+    if (total_len == 0)
+    {
+        return true;
+    }
+
+    path = (char *)lwm2m_malloc(total_len + 1);
+    if (path == NULL)
+    {
+        return false;
+    }
+
+    for (opt = src; opt != NULL; opt = opt->next)
+    {
+        path[offset++] = '/';
+        if (opt->len > 0 && opt->data != NULL)
+        {
+            memcpy(path + offset, opt->data, opt->len);
+            offset += opt->len;
+        }
+    }
+    path[offset] = '\0';
+
+    coap_set_header_location_path(dst_packet, path);
+    lwm2m_free(path);
+    return true;
+}
+
 static bool validate_block_size(const uint16_t coap_block_size_arg) {
     const uint16_t valid_block_sizes[7] = {16, 32, 64, 128, 256, 512, 1024};
     int i;
@@ -249,7 +316,10 @@ static lwm2m_transaction_t * prv_create_next_block_transaction(lwm2m_transaction
     lwm2m_transaction_t * clone = transaction_new(transaction->peerH, (coap_method_t) message->code, NULL, NULL, nextMID, message->token_len, message->token);
     if (clone == NULL) return NULL;
 
-    coap_set_header_content_type(clone->message, message->type);
+    if (IS_OPTION(message, COAP_OPTION_CONTENT_TYPE))
+    {
+        coap_set_header_content_type(clone->message, message->content_type);
+    }
 
     if (message->proxy_uri != NULL)
     {
@@ -277,10 +347,13 @@ static lwm2m_transaction_t * prv_create_next_block_transaction(lwm2m_transaction
         coap_set_header_uri_port(clone->message, message->uri_port);
     }
 
-    if(IS_OPTION(message, COAP_OPTION_LOCATION_PATH))
+    if (IS_OPTION(message, COAP_OPTION_LOCATION_PATH) && message->location_path != NULL)
     {
-        ((coap_packet_t *)clone->message)->location_path = message->location_path;
-        SET_OPTION((coap_packet_t *)clone->message, COAP_OPTION_LOCATION_PATH);
+        if (!prv_copy_location_path_option(clone->message, message->location_path))
+        {
+            transaction_free(clone);
+            return NULL;
+        }
     }
     
     if (message->location_query != NULL)
@@ -291,16 +364,13 @@ static lwm2m_transaction_t * prv_create_next_block_transaction(lwm2m_transaction
         coap_set_header_location_query(clone->message, str);
     }
 
-    if(IS_OPTION(message, COAP_OPTION_CONTENT_TYPE))
+    if (IS_OPTION(message, COAP_OPTION_URI_PATH) && message->uri_path != NULL)
     {
-        ((coap_packet_t *)clone->message)->content_type = message->content_type;
-        SET_OPTION((coap_packet_t *)clone->message, COAP_OPTION_CONTENT_TYPE);
-    }
-  
-    if(IS_OPTION(message, COAP_OPTION_URI_PATH))
-    {
-        ((coap_packet_t *)clone->message)->uri_path = message->uri_path;
-        SET_OPTION((coap_packet_t *)clone->message, COAP_OPTION_URI_PATH);
+        if (!prv_copy_multi_option_segments(clone->message, message->uri_path, coap_set_header_uri_path_segment))
+        {
+            transaction_free(clone);
+            return NULL;
+        }
     }
 
     if (IS_OPTION(message, COAP_OPTION_OBSERVE))
@@ -317,10 +387,13 @@ static lwm2m_transaction_t * prv_create_next_block_transaction(lwm2m_transaction
         coap_set_header_if_match(clone->message, message->if_match, message->if_match_len);
     }
 
-    if(IS_OPTION(message, COAP_OPTION_URI_QUERY))
+    if (IS_OPTION(message, COAP_OPTION_URI_QUERY) && message->uri_query != NULL)
     {
-        ((coap_packet_t *)clone->message)->uri_query = message->uri_query;
-        SET_OPTION((coap_packet_t *)clone->message, COAP_OPTION_URI_QUERY);
+        if (!prv_copy_multi_option_segments(clone->message, message->uri_query, coap_set_header_uri_query_segment))
+        {
+            transaction_free(clone);
+            return NULL;
+        }
     }
 
     if (IS_OPTION(message, COAP_OPTION_IF_NONE_MATCH))
@@ -330,6 +403,7 @@ static lwm2m_transaction_t * prv_create_next_block_transaction(lwm2m_transaction
 
     uint8_t *cloned_transaction_payload = (uint8_t *)lwm2m_malloc(transaction->payload_len);
     if (cloned_transaction_payload == NULL) {
+        transaction_free(clone);
         return NULL;
     }
     memcpy(cloned_transaction_payload, transaction->payload, transaction->payload_len);
