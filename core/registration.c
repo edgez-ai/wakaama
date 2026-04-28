@@ -1188,7 +1188,49 @@ __attribute__((weak)) int lwm2m_server_build_registration_ack_payload(lwm2m_cont
                                                                        bool clientSampleVersionSet,
                                                                        uint8_t *buffer,
                                                                        size_t bufferSize,
-                                                                       size_t *outLen);
+                                                                       size_t *outLen)
+{
+    static time_t s_server_start_time = 0;
+    time_t now_sec;
+    uint64_t uptime_ms;
+    int written;
+
+    (void)contextP;
+    (void)clientP;
+    (void)clientSampleVersion;
+    (void)clientSampleVersionSet;
+
+    if (buffer == NULL || outLen == NULL || bufferSize == 0)
+    {
+        return 0;
+    }
+
+    *outLen = 0;
+    now_sec = lwm2m_gettime();
+    if (now_sec < 0)
+    {
+        return 0;
+    }
+
+    if (s_server_start_time == 0 || now_sec < s_server_start_time)
+    {
+        s_server_start_time = now_sec;
+    }
+
+    uptime_ms = (uint64_t)(now_sec - s_server_start_time) * 1000ULL;
+
+    written = snprintf((char *)buffer,
+                       bufferSize,
+                       "{\"server_uptime_ms\":%llu}",
+                       (unsigned long long)uptime_ms);
+    if (written <= 0 || (size_t)written >= bufferSize)
+    {
+        return 0;
+    }
+
+    *outLen = (size_t)written;
+    return 1;
+}
 
 static void prv_freeClientObjectList(lwm2m_client_object_t * objects)
 {
