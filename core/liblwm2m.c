@@ -58,6 +58,7 @@
 #include <stdio.h>
 #ifdef ESP_PLATFORM
 #include "esp_system.h"
+#include "esp_log.h"
 #endif
 
 
@@ -489,6 +490,9 @@ next_step:
     case STATE_REGISTER_REQUIRED:
     {
         LWM2M_CORE_LOGI("lwm2m_step entering STATE_REGISTER_REQUIRED");
+        contextP->registrationUptimeSynced = false;
+        contextP->registrationUptimeEpochUs = 0;
+        contextP->registrationLastRttMs = 0;
         int result = registration_start(contextP, true);
         LWM2M_CORE_LOGI("lwm2m_step registration_start result=%d", result);
         if (COAP_NO_ERROR != result) return result;
@@ -554,4 +558,74 @@ next_step:
     LOG_ARG("Final state: %s", STR_STATE(contextP->state));
 #endif
     return 0;
+}
+
+bool lwm2m_registration_uptime_is_synced(const lwm2m_context_t *contextP)
+{
+    return (contextP != NULL && contextP->registrationUptimeSynced);
+}
+
+int64_t lwm2m_registration_uptime_ms(const lwm2m_context_t *contextP)
+{
+    if (contextP == NULL || !contextP->registrationUptimeSynced)
+    {
+        return -1;
+    }
+
+#ifdef ESP_PLATFORM
+    int64_t now_us = ((int64_t)esp_log_timestamp()) * 1000LL;
+#else
+    time_t now_sec = lwm2m_gettime();
+    if (now_sec < 0)
+    {
+        return -1;
+    }
+    int64_t now_us = ((int64_t)now_sec) * 1000000LL;
+#endif
+
+    if (now_us < contextP->registrationUptimeEpochUs)
+    {
+        return -1;
+    }
+
+    return (now_us - contextP->registrationUptimeEpochUs) / 1000;
+}
+
+int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP)
+{
+    int64_t synced_ms;
+
+    if (contextP == NULL || !contextP->registrationUptimeSynced)
+    {
+        return 0;
+    }
+
+    synced_ms = lwm2m_registration_uptime_ms(contextP);
+    if (synced_ms < 0)
+    {
+        return 0;
+    }
+
+#ifdef ESP_PLATFORM
+    return synced_ms - (int64_t)esp_log_timestamp();
+#else
+    {
+        time_t now_sec = lwm2m_gettime();
+        if (now_sec < 0)
+        {
+            return 0;
+        }
+        return synced_ms - (((int64_t)now_sec) * 1000);
+    }
+#endif
+}
+
+uint32_t lwm2m_registration_last_rtt_ms(const lwm2m_context_t *contextP)
+{
+    if (contextP == NULL)
+    {
+        return 0;
+    }
+
+    return contextP->registrationLastRttMs;
 }

@@ -796,6 +796,9 @@ struct _lwm2m_context_
     lwm2m_server_t *     serverList;
     lwm2m_object_t *     objectList;
     lwm2m_observed_t *   observedList;
+    bool                 registrationUptimeSynced;
+    int64_t              registrationUptimeEpochUs;
+    uint32_t             registrationLastRttMs;
     // Custom bootstrap data to be sent in bootstrap request
     
 #endif
@@ -844,6 +847,13 @@ int lwm2m_update_registration(lwm2m_context_t * contextP, uint16_t shortServerID
 // send deregistration to all servers connected to client
 void lwm2m_deregister(lwm2m_context_t * context);
 void lwm2m_resource_value_changed(lwm2m_context_t * contextP, lwm2m_uri_t * uriP);
+
+/* Registration time sync: epoch anchored at registration RTT midpoint. */
+bool lwm2m_registration_uptime_is_synced(const lwm2m_context_t *contextP);
+int64_t lwm2m_registration_uptime_ms(const lwm2m_context_t *contextP);
+/* Returns server_aligned_uptime_ms - local_uptime_ms. Check sync state before use. */
+int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP);
+uint32_t lwm2m_registration_last_rtt_ms(const lwm2m_context_t *contextP);
 
 #ifndef LWM2M_VERSION_1_0
 // send resources specified by URIs to the server specified by the server short

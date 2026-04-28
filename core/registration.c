@@ -686,7 +686,176 @@ typedef struct
     lwm2m_server_t * server;
     char * query;
     uint8_t * payload;
+#ifdef ESP_PLATFORM
+    int64_t tx_mono_us;
+#else
+    time_t tx_time_sec;
+#endif
 } registration_data_t;
+
+static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uint64_t *uptime_ms_out)
+{
+    static const char key[] = "\"server_uptime_ms\"";
+    const char *buf;
+    const char *end;
+    const char *p;
+    const char *k;
+
+    if (uptime_ms_out == NULL)
+    {
+        return false;
+    }
+    *uptime_ms_out = 0;
+
+    if (payload == NULL || len == 0)
+    {
+        return false;
+    }
+
+    buf = (const char *)payload;
+    end = buf + len;
+
+    for (p = buf; p < end; p++)
+    {
+        size_t remaining = (size_t)(end - p);
+        if (remaining < sizeof(key) - 1)
+        {
+            break;
+        }
+
+        if (memcmp(p, key, sizeof(key) - 1) != 0)
+        {
+            continue;
+        }
+
+        k = p + (sizeof(key) - 1);
+        while (k < end && (*k == ' ' || *k == '\t' || *k == '\r' || *k == '\n'))
+        {
+            k++;
+        }
+        if (k >= end || *k != ':')
+        {
+            return false;
+        }
+
+        k++;
+        while (k < end && (*k == ' ' || *k == '\t' || *k == '\r' || *k == '\n'))
+        {
+            k++;
+        }
+        if (k >= end || *k < '0' || *k > '9')
+        {
+            return false;
+        }
+
+        {
+            uint64_t value = 0;
+            while (k < end && *k >= '0' && *k <= '9')
+            {
+                uint8_t digit = (uint8_t)(*k - '0');
+                if (value > (UINT64_MAX - digit) / 10)
+                {
+                    return false;
+                }
+                value = (value * 10) + digit;
+                k++;
+            }
+
+            *uptime_ms_out = value;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
+                                             const registration_data_t *dataP,
+                                             const coap_packet_t *packet)
+{
+    uint64_t server_uptime_ms = 0;
+    bool has_server_uptime = false;
+
+    if (contextP == NULL || dataP == NULL)
+    {
+        return;
+    }
+
+    if (packet != NULL)
+    {
+        has_server_uptime = prv_extract_server_uptime_ms(packet->payload,
+                                                         packet->payload_len,
+                                                         &server_uptime_ms);
+    }
+
+#ifdef ESP_PLATFORM
+    int64_t now_us = ((int64_t)esp_log_timestamp()) * 1000LL;
+    if (dataP->tx_mono_us > 0 && now_us >= dataP->tx_mono_us)
+    {
+        int64_t rtt_us = now_us - dataP->tx_mono_us;
+        int64_t one_way_us = rtt_us / 2;
+
+        if (has_server_uptime)
+        {
+            int64_t estimated_server_now_us = (int64_t)(server_uptime_ms * 1000ULL) + one_way_us;
+             int64_t offset_ms = (estimated_server_now_us - now_us) / 1000;
+            contextP->registrationUptimeEpochUs = now_us - estimated_server_now_us;
+             printf("[time_sync] registration sync done: mode=server_uptime rtt_ms=%u server_uptime_ms=%llu local_now_us=%lld offset_ms=%lld epoch_us=%lld\\n",
+                   (unsigned)((rtt_us + 500) / 1000),
+                   (unsigned long long)server_uptime_ms,
+                   (long long)now_us,
+                 (long long)offset_ms,
+                   (long long)contextP->registrationUptimeEpochUs);
+        }
+        else
+        {
+            int64_t midpoint_us = dataP->tx_mono_us + one_way_us;
+            contextP->registrationUptimeEpochUs = midpoint_us;
+            printf("[time_sync] registration sync done: mode=local_midpoint rtt_ms=%u epoch_us=%lld now_us=%lld\n",
+                   (unsigned)((rtt_us + 500) / 1000),
+                   (long long)contextP->registrationUptimeEpochUs,
+                   (long long)now_us);
+        }
+
+        contextP->registrationLastRttMs = (uint32_t)((rtt_us + 500) / 1000);
+        contextP->registrationUptimeSynced = true;
+        WAKAAMA_REG_LOGI("Registration uptime sync updated (rtt_ms=%u)",
+                         (unsigned)contextP->registrationLastRttMs);
+    }
+#else
+    time_t now_sec = lwm2m_gettime();
+    if (dataP->tx_time_sec > 0 && now_sec >= dataP->tx_time_sec)
+    {
+        time_t rtt_sec = now_sec - dataP->tx_time_sec;
+        time_t one_way_sec = rtt_sec / 2;
+        if (has_server_uptime)
+        {
+            int64_t estimated_server_now_us = (int64_t)(server_uptime_ms * 1000ULL) + ((int64_t)one_way_sec * 1000000LL);
+             int64_t local_now_us = ((int64_t)now_sec) * 1000000LL;
+             int64_t offset_ms = (estimated_server_now_us - local_now_us) / 1000;
+            contextP->registrationUptimeEpochUs = (((int64_t)now_sec) * 1000000LL) - estimated_server_now_us;
+             printf("[time_sync] registration sync done: mode=server_uptime rtt_ms=%u server_uptime_ms=%llu now_sec=%ld offset_ms=%lld epoch_us=%lld\\n",
+                   (unsigned)(rtt_sec * 1000),
+                   (unsigned long long)server_uptime_ms,
+                   (long)now_sec,
+                 (long long)offset_ms,
+                   (long long)contextP->registrationUptimeEpochUs);
+        }
+        else
+        {
+            time_t midpoint_sec = dataP->tx_time_sec + one_way_sec;
+            contextP->registrationUptimeEpochUs = ((int64_t)midpoint_sec) * 1000000LL;
+            printf("[time_sync] registration sync done: mode=local_midpoint rtt_ms=%u epoch_us=%lld now_sec=%ld\n",
+                   (unsigned)(rtt_sec * 1000),
+                   (long long)contextP->registrationUptimeEpochUs,
+                   (long)now_sec);
+        }
+
+        contextP->registrationLastRttMs = (uint32_t)(rtt_sec * 1000);
+        contextP->registrationUptimeSynced = true;
+    }
+#endif
+}
 
 static void prv_handleRegistrationReply(lwm2m_context_t * contextP,
                                         lwm2m_transaction_t * transacP,
@@ -714,6 +883,7 @@ static void prv_handleRegistrationReply(lwm2m_context_t * contextP,
         if (packet != NULL && packet->code == COAP_201_CREATED)
         {
             dataP->server->status = STATE_REGISTERED;
+            prv_updateRegistrationUptimeSync(contextP, dataP, packet);
             if (NULL != dataP->server->location)
             {
                 lwm2m_free(dataP->server->location);
@@ -815,6 +985,7 @@ static void prv_handleRegistrationUpdateReply(lwm2m_context_t * contextP,
         if (packet != NULL && packet->code == COAP_204_CHANGED)
         {
             dataP->server->status = STATE_REGISTERED;
+            prv_updateRegistrationUptimeSync(contextP, dataP, packet);
             if (packet->payload != NULL &&
                 packet->payload_len > 0 &&
                 lwm2m_sample_apply_json_config != NULL &&
@@ -930,6 +1101,11 @@ static uint8_t prv_register(lwm2m_context_t * contextP,
     dataP->payload = payload;
     dataP->query = query;
     dataP->server = server;
+#ifdef ESP_PLATFORM
+    dataP->tx_mono_us = ((int64_t)esp_log_timestamp()) * 1000LL;
+#else
+    dataP->tx_time_sec = lwm2m_gettime();
+#endif
     transaction->callback = prv_handleRegistrationReply;
 
     transaction->userData = (void *) dataP;
@@ -1007,6 +1183,12 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
 
     dataP->payload = payload;
     dataP->server = server;
+    dataP->query = NULL;
+#ifdef ESP_PLATFORM
+    dataP->tx_mono_us = ((int64_t)esp_log_timestamp()) * 1000LL;
+#else
+    dataP->tx_time_sec = lwm2m_gettime();
+#endif
 
     transaction->callback = prv_handleRegistrationUpdateReply;
     transaction->userData = (void *) dataP;
