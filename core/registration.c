@@ -61,6 +61,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <limits.h>
+#include <stdint.h>
 #ifdef ESP_PLATFORM
 #include "esp_sleep.h"
 #include "esp_log.h"
@@ -806,21 +807,25 @@ static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                    (long long)now_us,
                  (long long)offset_ms,
                    (long long)contextP->registrationUptimeEpochUs);
+
+            contextP->registrationLastRttMs = (uint32_t)((rtt_us + 500) / 1000);
+            contextP->registrationUptimeSynced = true;
+            WAKAAMA_REG_LOGI("Registration uptime sync updated (rtt_ms=%u)",
+                             (unsigned)contextP->registrationLastRttMs);
         }
         else
         {
             int64_t midpoint_us = dataP->tx_mono_us + one_way_us;
-            contextP->registrationUptimeEpochUs = midpoint_us;
-            printf("[time_sync] registration sync done: mode=local_midpoint rtt_ms=%u epoch_us=%lld now_us=%lld\n",
+             int64_t offset_ms = (midpoint_us - now_us) / 1000;
+            contextP->registrationUptimeSynced = false;
+            contextP->registrationUptimeEpochUs = 0;
+            contextP->registrationLastRttMs = (uint32_t)((rtt_us + 500) / 1000);
+            printf("[time_sync] registration sync unavailable: mode=local_midpoint rtt_ms=%u midpoint_us=%lld local_now_us=%lld midpoint_offset_ms=%lld (server_uptime_ms missing)\n",
                    (unsigned)((rtt_us + 500) / 1000),
-                   (long long)contextP->registrationUptimeEpochUs,
-                   (long long)now_us);
+                 (long long)midpoint_us,
+                 (long long)now_us,
+                   (long long)offset_ms);
         }
-
-        contextP->registrationLastRttMs = (uint32_t)((rtt_us + 500) / 1000);
-        contextP->registrationUptimeSynced = true;
-        WAKAAMA_REG_LOGI("Registration uptime sync updated (rtt_ms=%u)",
-                         (unsigned)contextP->registrationLastRttMs);
     }
 #else
     time_t now_sec = lwm2m_gettime();
@@ -840,19 +845,25 @@ static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                    (long)now_sec,
                  (long long)offset_ms,
                    (long long)contextP->registrationUptimeEpochUs);
+
+            contextP->registrationLastRttMs = (uint32_t)(rtt_sec * 1000);
+            contextP->registrationUptimeSynced = true;
         }
         else
         {
             time_t midpoint_sec = dataP->tx_time_sec + one_way_sec;
-            contextP->registrationUptimeEpochUs = ((int64_t)midpoint_sec) * 1000000LL;
-            printf("[time_sync] registration sync done: mode=local_midpoint rtt_ms=%u epoch_us=%lld now_sec=%ld\n",
+             int64_t midpoint_us = ((int64_t)midpoint_sec) * 1000000LL;
+             int64_t local_now_us = ((int64_t)now_sec) * 1000000LL;
+             int64_t offset_ms = (midpoint_us - local_now_us) / 1000;
+            contextP->registrationUptimeSynced = false;
+            contextP->registrationUptimeEpochUs = 0;
+            contextP->registrationLastRttMs = (uint32_t)(rtt_sec * 1000);
+            printf("[time_sync] registration sync unavailable: mode=local_midpoint rtt_ms=%u midpoint_us=%lld local_now_us=%lld midpoint_offset_ms=%lld (server_uptime_ms missing)\n",
                    (unsigned)(rtt_sec * 1000),
-                   (long long)contextP->registrationUptimeEpochUs,
-                   (long)now_sec);
+                 (long long)midpoint_us,
+                 (long long)local_now_us,
+                   (long long)offset_ms);
         }
-
-        contextP->registrationLastRttMs = (uint32_t)(rtt_sec * 1000);
-        contextP->registrationUptimeSynced = true;
     }
 #endif
 }
