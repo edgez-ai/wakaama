@@ -31,6 +31,9 @@
 
 static const char *TAG = "wakaama_udp";
 
+/* Implemented in main/driver/esp32/lwm2m_client.c when available. */
+extern void lwm2m_request_socket_reinit(void) __attribute__((weak));
+
 dtls_context_t * dtlsContext;
 
 typedef struct _dtls_app_context_
@@ -75,6 +78,33 @@ static void log_connection_endpoint(const char *prefix, const dtls_connection_t 
 
     ESP_LOGI(TAG, "%s: sock=%d remote_family=%d secure=%u", prefix, connP->sock,
              connP->addr.sin6_family, (unsigned)(connP->dtlsSession != NULL));
+}
+
+static void maybe_request_socket_reinit(int send_errno)
+{
+    static time_t s_last_reinit_request = 0;
+
+    if (send_errno != ENOBUFS &&
+        send_errno != ENETDOWN &&
+        send_errno != ENETUNREACH &&
+        send_errno != EHOSTUNREACH)
+    {
+        return;
+    }
+
+    time_t now = lwm2m_gettime();
+    if (s_last_reinit_request != 0 && (now - s_last_reinit_request) < 2)
+    {
+        return;
+    }
+
+    s_last_reinit_request = now;
+    ESP_LOGW(TAG, "Requesting deferred UDP socket reinit after send errno=%d (%s)",
+             send_errno, strerror(send_errno));
+    if (lwm2m_request_socket_reinit)
+    {
+        lwm2m_request_socket_reinit();
+    }
 }
 
 /********************* Security Obj Helpers **********************/
@@ -245,10 +275,13 @@ int send_data(dtls_connection_t *connP,
         LOG("sending message");
         nbSent = sendto(sock, buffer + offset, length - offset, 0, (struct sockaddr *)&(connP->addr), connP->addrLen);
             if (nbSent == -1) {
+                int send_errno = errno;
                 LOG("send_data: sendto() failed");
                 ESP_LOGW(TAG, "send_data failed: sock=%d req=%u offset=%u errno=%d (%s)",
-                         sock, (unsigned)length, (unsigned)offset, errno, strerror(errno));
+                         sock, (unsigned)length, (unsigned)offset, send_errno, strerror(send_errno));
                 log_connection_endpoint("send_data failed endpoint", connP);
+                maybe_request_socket_reinit(send_errno);
+                errno = send_errno;
                 return -1;
             }
         ESP_LOGI(TAG, "send_data progress: sock=%d sent=%d total=%u/%u", sock, nbSent,
