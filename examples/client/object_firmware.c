@@ -348,12 +348,13 @@ static void ota_task(void *pvParameter)
     // Configure HTTP client for OTA
     esp_http_client_config_t config = {
         .url = data->package_uri,
-        .timeout_ms = 30000,
-        .keep_alive_enable = true,
+        .timeout_ms = 240000,
+        .keep_alive_enable = false,
         .disable_auto_redirect = false,
         .max_redirection_count = 8,
-        .buffer_size = 4096,
-        .buffer_size_tx = 4096,
+        .buffer_size = 8192,
+        .buffer_size_tx = 8192,
+        .user_agent = "edge-device-esp32-ota/1.0",
     };
 
 #if CONFIG_ESP_TLS_INSECURE
@@ -363,10 +364,23 @@ static void ota_task(void *pvParameter)
     
     esp_https_ota_config_t ota_config = {
         .http_config = &config,
+        .partial_http_download = true,
+        .max_http_request_size = 4096,
     };
     
     esp_https_ota_handle_t https_ota_handle = NULL;
-    err = esp_https_ota_begin(&ota_config, &https_ota_handle);
+    const int max_begin_retries = 5;
+    for (int begin_retry = 0; begin_retry < max_begin_retries; begin_retry++) {
+        err = esp_https_ota_begin(&ota_config, &https_ota_handle);
+        if (err == ESP_OK) {
+            break;
+        }
+
+        ESP_LOGW(FW_TAG, "OTA begin attempt %d/%d failed: %s", begin_retry + 1, max_begin_retries, esp_err_to_name(err));
+        if (begin_retry < (max_begin_retries - 1)) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
     
     if (err != ESP_OK) {
         ESP_LOGE(FW_TAG, "OTA begin failed: %s", esp_err_to_name(err));
