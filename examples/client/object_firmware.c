@@ -51,6 +51,7 @@
 #include "esp_ota_ops.h"
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
+#include "esp_heap_caps.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -77,7 +78,16 @@
 /* OTA throughput tuning for high-latency links (e.g. HaLow mesh). */
 #define OTA_HTTP_RX_BUFFER_SIZE        (16 * 1024)
 #define OTA_HTTP_TX_BUFFER_SIZE        (16 * 1024)
-#define OTA_HTTP_REQUEST_CHUNK_SIZE    (32 * 1024)
+#define OTA_HTTP_REQUEST_CHUNK_SIZE    (64 * 1024)
+
+static void ota_log_heap(const char *stage)
+{
+    ESP_LOGI(FW_TAG,
+             "heap %s: free8=%u min8=%u",
+             stage,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
+}
 #endif
 
 /* LwM2M Firmware Update States (Resource 3) */
@@ -379,6 +389,8 @@ static void ota_task(void *pvParameter)
              config.buffer_size_tx,
              ota_config.max_http_request_size,
              config.keep_alive_enable);
+
+    ota_log_heap("before_begin");
     
     esp_https_ota_handle_t https_ota_handle = NULL;
     const int max_begin_retries = 5;
@@ -406,6 +418,8 @@ static void ota_task(void *pvParameter)
         data->state = FW_STATE_IDLE;
         goto ota_end;
     }
+
+    ota_log_heap("after_begin");
     
     esp_app_desc_t app_desc;
     err = esp_https_ota_get_img_desc(https_ota_handle, &app_desc);
@@ -414,6 +428,7 @@ static void ota_task(void *pvParameter)
         data->result = FW_RESULT_UNSUPPORTED_PKG;
         data->state = FW_STATE_IDLE;
         esp_https_ota_abort(https_ota_handle);
+        ota_log_heap("after_abort_img_desc");
         goto ota_end;
     }
     
@@ -463,6 +478,7 @@ static void ota_task(void *pvParameter)
         }
         data->state = FW_STATE_IDLE;
         esp_https_ota_abort(https_ota_handle);
+        ota_log_heap("after_abort_download");
         goto ota_end;
     }
     
@@ -481,6 +497,7 @@ static void ota_task(void *pvParameter)
     // Verify and finish OTA
     data->state = FW_STATE_UPDATING;
     err = esp_https_ota_finish(https_ota_handle);
+    ota_log_heap("after_finish");
     
     if (err == ESP_OK) {
         ESP_LOGI(FW_TAG, "OTA update successful! Rebooting in 3 seconds...");
