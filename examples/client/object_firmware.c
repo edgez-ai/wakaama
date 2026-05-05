@@ -350,7 +350,16 @@ static void ota_task(void *pvParameter)
         .url = data->package_uri,
         .timeout_ms = 30000,
         .keep_alive_enable = true,
+        .disable_auto_redirect = false,
+        .max_redirection_count = 8,
+        .buffer_size = 4096,
+        .buffer_size_tx = 4096,
     };
+
+#if CONFIG_ESP_TLS_INSECURE
+    // Test-only mode: skip server certificate verification.
+    config.skip_cert_common_name_check = true;
+#endif
     
     esp_https_ota_config_t ota_config = {
         .http_config = &config,
