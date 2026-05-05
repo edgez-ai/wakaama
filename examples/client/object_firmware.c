@@ -410,13 +410,34 @@ static void ota_task(void *pvParameter)
     snprintf(data->pkg_name, sizeof(data->pkg_name), "%s", app_desc.project_name);
     
     // Download and flash firmware
+    int last_progress_percent = -1;
+    int last_progress_bytes = 0;
+    const int progress_step_percent = 5;
+    const int progress_step_bytes = 64 * 1024;
+
     while (1) {
         err = esp_https_ota_perform(https_ota_handle);
         if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
             break;
         }
-        // Download in progress
-        ESP_LOGD(FW_TAG, "Image bytes read: %d", esp_https_ota_get_image_len_read(https_ota_handle));
+
+        // Print OTA progress at INFO level so it is visible in normal monitor logs.
+        int bytes_read = esp_https_ota_get_image_len_read(https_ota_handle);
+        int image_size = esp_https_ota_get_image_size(https_ota_handle);
+
+        if (image_size > 0) {
+            int percent = (bytes_read * 100) / image_size;
+            if ((percent >= (last_progress_percent + progress_step_percent)) ||
+                ((bytes_read - last_progress_bytes) >= progress_step_bytes)) {
+                ESP_LOGI(FW_TAG, "OTA download progress: %d/%d bytes (%d%%)",
+                         bytes_read, image_size, percent);
+                last_progress_percent = percent;
+                last_progress_bytes = bytes_read;
+            }
+        } else if ((bytes_read - last_progress_bytes) >= progress_step_bytes) {
+            ESP_LOGI(FW_TAG, "OTA download progress: %d bytes", bytes_read);
+            last_progress_bytes = bytes_read;
+        }
     }
     
     if (err != ESP_OK) {
@@ -434,6 +455,9 @@ static void ota_task(void *pvParameter)
     }
     
     data->state = FW_STATE_DOWNLOADED;
+    ESP_LOGI(FW_TAG, "OTA download progress: %d/%d bytes (100%%)",
+             esp_https_ota_get_image_len_read(https_ota_handle),
+             esp_https_ota_get_image_size(https_ota_handle));
     ESP_LOGI(FW_TAG, "OTA download completed successfully");
     
     // Notify download complete
