@@ -73,6 +73,11 @@
 
 #ifdef ESP_PLATFORM
 #define FW_TAG "FW_OTA"
+
+/* OTA throughput tuning for high-latency links (e.g. HaLow mesh). */
+#define OTA_HTTP_RX_BUFFER_SIZE        (16 * 1024)
+#define OTA_HTTP_TX_BUFFER_SIZE        (16 * 1024)
+#define OTA_HTTP_REQUEST_CHUNK_SIZE    (32 * 1024)
 #endif
 
 /* LwM2M Firmware Update States (Resource 3) */
@@ -349,11 +354,11 @@ static void ota_task(void *pvParameter)
     esp_http_client_config_t config = {
         .url = data->package_uri,
         .timeout_ms = 240000,
-        .keep_alive_enable = false,
+        .keep_alive_enable = true,
         .disable_auto_redirect = false,
         .max_redirection_count = 8,
-        .buffer_size = 8192,
-        .buffer_size_tx = 8192,
+        .buffer_size = OTA_HTTP_RX_BUFFER_SIZE,
+        .buffer_size_tx = OTA_HTTP_TX_BUFFER_SIZE,
         .user_agent = "edge-device-esp32-ota/1.0",
     };
 
@@ -365,8 +370,15 @@ static void ota_task(void *pvParameter)
     esp_https_ota_config_t ota_config = {
         .http_config = &config,
         .partial_http_download = true,
-        .max_http_request_size = 4096,
+        .max_http_request_size = OTA_HTTP_REQUEST_CHUNK_SIZE,
     };
+
+    ESP_LOGI(FW_TAG,
+             "OTA HTTP tuning: rx_buf=%d tx_buf=%d chunk=%d keep_alive=%d",
+             config.buffer_size,
+             config.buffer_size_tx,
+             ota_config.max_http_request_size,
+             config.keep_alive_enable);
     
     esp_https_ota_handle_t https_ota_handle = NULL;
     const int max_begin_retries = 5;
