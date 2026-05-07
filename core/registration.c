@@ -694,19 +694,25 @@ typedef struct
 #endif
 } registration_data_t;
 
-static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uint64_t *uptime_ms_out)
+static bool prv_extract_json_u64_field(const uint8_t *payload, size_t len, const char *key, uint64_t *value_out)
 {
-    static const char key[] = "\"server_uptime_ms\"";
     const char *buf;
     const char *end;
     const char *p;
     const char *k;
+    size_t key_len;
 
-    if (uptime_ms_out == NULL)
+    if (value_out == NULL || key == NULL || key[0] == '\0')
     {
         return false;
     }
-    *uptime_ms_out = 0;
+    *value_out = 0;
+
+    key_len = strlen(key);
+    if (key_len == 0)
+    {
+        return false;
+    }
 
     if (payload == NULL || len == 0)
     {
@@ -719,17 +725,17 @@ static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uin
     for (p = buf; p < end; p++)
     {
         size_t remaining = (size_t)(end - p);
-        if (remaining < sizeof(key) - 1)
+        if (remaining < key_len)
         {
             break;
         }
 
-        if (memcmp(p, key, sizeof(key) - 1) != 0)
+        if (memcmp(p, key, key_len) != 0)
         {
             continue;
         }
 
-        k = p + (sizeof(key) - 1);
+        k = p + key_len;
         while (k < end && (*k == ' ' || *k == '\t' || *k == '\r' || *k == '\n'))
         {
             k++;
@@ -762,7 +768,7 @@ static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uin
                 k++;
             }
 
-            *uptime_ms_out = value;
+            *value_out = value;
             return true;
         }
     }
@@ -770,12 +776,43 @@ static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uin
     return false;
 }
 
+static bool prv_extract_server_uptime_ms(const uint8_t *payload, size_t len, uint64_t *uptime_ms_out)
+{
+    return prv_extract_json_u64_field(payload, len, "\"server_uptime_ms\"", uptime_ms_out);
+}
+
+static bool prv_extract_server_sec_of_year(const uint8_t *payload, size_t len, uint32_t *sec_of_year_out)
+{
+    uint64_t value = 0;
+
+    if (sec_of_year_out == NULL)
+    {
+        return false;
+    }
+    *sec_of_year_out = 0;
+
+    if (!prv_extract_json_u64_field(payload, len, "\"server_sec_of_year\"", &value))
+    {
+        return false;
+    }
+
+    if (value > UINT32_MAX)
+    {
+        return false;
+    }
+
+    *sec_of_year_out = (uint32_t)value;
+    return true;
+}
+
 static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                                              const registration_data_t *dataP,
                                              const coap_packet_t *packet)
 {
     uint64_t server_uptime_ms = 0;
+    uint32_t server_sec_of_year = 0;
     bool has_server_uptime = false;
+    bool has_server_sec_of_year = false;
 
     if (contextP == NULL || dataP == NULL)
     {
@@ -787,6 +824,11 @@ static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
         has_server_uptime = prv_extract_server_uptime_ms(packet->payload,
                                                          packet->payload_len,
                                                          &server_uptime_ms);
+        has_server_sec_of_year = prv_extract_server_sec_of_year(packet->payload,
+                                                                packet->payload_len,
+                                                                &server_sec_of_year);
+        contextP->registrationServerSecOfYearValid = has_server_sec_of_year;
+        contextP->registrationServerSecOfYear = has_server_sec_of_year ? server_sec_of_year : 0;
     }
 
 #ifdef ESP_PLATFORM

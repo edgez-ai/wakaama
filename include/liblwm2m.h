@@ -799,6 +799,8 @@ struct _lwm2m_context_
     bool                 registrationUptimeSynced;
     int64_t              registrationUptimeEpochUs;
     uint32_t             registrationLastRttMs;
+    bool                 registrationServerSecOfYearValid;
+    uint32_t             registrationServerSecOfYear;
     // Custom bootstrap data to be sent in bootstrap request
     
 #endif
@@ -854,6 +856,8 @@ int64_t lwm2m_registration_uptime_ms(const lwm2m_context_t *contextP);
 /* Returns server_aligned_uptime_ms - local_uptime_ms. Check sync state before use. */
 int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP);
 uint32_t lwm2m_registration_last_rtt_ms(const lwm2m_context_t *contextP);
+bool lwm2m_registration_server_sec_of_year_is_valid(const lwm2m_context_t *contextP);
+uint32_t lwm2m_registration_server_sec_of_year(const lwm2m_context_t *contextP);
 
 #ifndef LWM2M_VERSION_1_0
 // send resources specified by URIs to the server specified by the server short

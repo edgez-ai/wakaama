@@ -493,6 +493,8 @@ next_step:
         contextP->registrationUptimeSynced = false;
         contextP->registrationUptimeEpochUs = 0;
         contextP->registrationLastRttMs = 0;
+        contextP->registrationServerSecOfYearValid = false;
+        contextP->registrationServerSecOfYear = 0;
         int result = registration_start(contextP, true);
         LWM2M_CORE_LOGI("lwm2m_step registration_start result=%d", result);
         if (COAP_NO_ERROR != result) return result;
@@ -628,4 +630,19 @@ uint32_t lwm2m_registration_last_rtt_ms(const lwm2m_context_t *contextP)
     }
 
     return contextP->registrationLastRttMs;
+}
+
+bool lwm2m_registration_server_sec_of_year_is_valid(const lwm2m_context_t *contextP)
+{
+    return (contextP != NULL && contextP->registrationServerSecOfYearValid);
+}
+
+uint32_t lwm2m_registration_server_sec_of_year(const lwm2m_context_t *contextP)
+{
+    if (contextP == NULL || !contextP->registrationServerSecOfYearValid)
+    {
+        return 0;
+    }
+
+    return contextP->registrationServerSecOfYear;
 }
