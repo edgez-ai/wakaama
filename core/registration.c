@@ -60,6 +60,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdint.h>
 #ifdef ESP_PLATFORM
@@ -74,6 +75,8 @@ extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
 __attribute__((weak)) int lwm2m_sample_apply_json_config(const uint8_t *json, size_t len);
 __attribute__((weak)) const char *lwm2m_client_get_firmware_version(void);
+__attribute__((weak)) int lwm2m_sample_get_i2c_script_missing(void);
+__attribute__((weak)) int lwm2m_sample_get_rs485_script_missing(void);
 
 #ifdef ESP_PLATFORM
 static const char *WAKAAMA_REG_TAG = "wakaama_reg";
@@ -216,6 +219,8 @@ static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
         index += res;
     }
 
+    index += strlen("&i2c_missing=0&rs485_missing=0");
+
     client_version = prv_get_client_version_for_query();
     if (client_version)
     {
@@ -234,6 +239,8 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
     size_t index;
     int res;
     const char *client_version;
+    int i2c_missing = 0;
+    int rs485_missing = 0;
 
     res = utils_stringCopy(buffer, length, QUERY_STARTER QUERY_VERSION_FULL QUERY_DELIMITER QUERY_NAME);
     if (res < 0) return 0;
@@ -334,6 +341,29 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
         index += res;
     }
 
+    if (lwm2m_sample_get_i2c_script_missing)
+    {
+        i2c_missing = lwm2m_sample_get_i2c_script_missing() ? 1 : 0;
+    }
+    if (lwm2m_sample_get_rs485_script_missing)
+    {
+        rs485_missing = lwm2m_sample_get_rs485_script_missing() ? 1 : 0;
+    }
+
+    res = utils_stringCopy(buffer + index, length - index, "&i2c_missing=");
+    if (res < 0) return 0;
+    index += res;
+    res = utils_intToText((uint64_t)i2c_missing, (uint8_t *)buffer + index, length - index);
+    if (res == 0) return 0;
+    index += res;
+
+    res = utils_stringCopy(buffer + index, length - index, "&rs485_missing=");
+    if (res < 0) return 0;
+    index += res;
+    res = utils_intToText((uint64_t)rs485_missing, (uint8_t *)buffer + index, length - index);
+    if (res == 0) return 0;
+    index += res;
+
     client_version = prv_get_client_version_for_query();
     if (client_version)
     {
@@ -360,13 +390,15 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
 
 static int prv_getRegistrationUpdateQueryLength(void)
 {
+    int length = 0;
     const char *client_version = prv_get_client_version_for_query();
-    if (!client_version)
+    if (client_version)
     {
-        return 0;
+        length += (int)(strlen("cv=") + strlen(client_version));
     }
 
-    return (int)(strlen("cv=") + strlen(client_version) + 1);
+    length += (int)strlen("i2c_missing=0&rs485_missing=0");
+    return length > 0 ? (length + 1) : 0;
 }
 
 static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
@@ -374,21 +406,73 @@ static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
     size_t index = 0;
     int res;
     const char *client_version = prv_get_client_version_for_query();
+    int i2c_missing = 0;
+    int rs485_missing = 0;
 
-    if (!buffer || length == 0 || !client_version)
+    if (!buffer || length == 0)
     {
         return 0;
     }
 
-    res = utils_stringCopy(buffer + index, length - index, "cv=");
+    if (lwm2m_sample_get_i2c_script_missing)
+    {
+        i2c_missing = lwm2m_sample_get_i2c_script_missing() ? 1 : 0;
+    }
+    if (lwm2m_sample_get_rs485_script_missing)
+    {
+        rs485_missing = lwm2m_sample_get_rs485_script_missing() ? 1 : 0;
+    }
+
+    if (client_version)
+    {
+        res = utils_stringCopy(buffer + index, length - index, "cv=");
+        if (res < 0)
+        {
+            return 0;
+        }
+        index += (size_t)res;
+
+        res = utils_stringCopy(buffer + index, length - index, client_version);
+        if (res < 0)
+        {
+            return 0;
+        }
+        index += (size_t)res;
+
+        if (index >= length)
+        {
+            return 0;
+        }
+        buffer[index++] = '&';
+    }
+
+    res = utils_stringCopy(buffer + index, length - index, "i2c_missing=");
     if (res < 0)
     {
         return 0;
     }
     index += (size_t)res;
+    res = utils_intToText((uint64_t)i2c_missing, (uint8_t *)buffer + index, length - index);
+    if (res == 0)
+    {
+        return 0;
+    }
+    index += (size_t)res;
 
-    res = utils_stringCopy(buffer + index, length - index, client_version);
+    if (index >= length)
+    {
+        return 0;
+    }
+    buffer[index++] = '&';
+
+    res = utils_stringCopy(buffer + index, length - index, "rs485_missing=");
     if (res < 0)
+    {
+        return 0;
+    }
+    index += (size_t)res;
+    res = utils_intToText((uint64_t)rs485_missing, (uint8_t *)buffer + index, length - index);
+    if (res == 0)
     {
         return 0;
     }
@@ -902,6 +986,225 @@ static bool prv_extract_server_sec_of_year(const uint8_t *payload, size_t len, u
     return true;
 }
 
+static bool prv_extract_json_string_field(const uint8_t *payload,
+                                          size_t len,
+                                          const char *key,
+                                          char *value_out,
+                                          size_t value_out_size)
+{
+    const char *buf;
+    const char *end;
+    const char *pos;
+    const char *k;
+    const char *v_start;
+    const char *v_end;
+    size_t out_len;
+
+    if (value_out == NULL || value_out_size == 0)
+    {
+        return false;
+    }
+    value_out[0] = '\0';
+
+    if (payload == NULL || len == 0 || key == NULL)
+    {
+        return false;
+    }
+
+    buf = (const char *)payload;
+    end = buf + len;
+    pos = buf;
+
+    while (pos < end)
+    {
+        k = strstr(pos, key);
+        if (k == NULL || k >= end)
+        {
+            return false;
+        }
+
+        k += strlen(key);
+        while (k < end && (*k == ' ' || *k == '\t' || *k == '\r' || *k == '\n'))
+        {
+            k++;
+        }
+        if (k >= end || *k != ':')
+        {
+            pos = k;
+            continue;
+        }
+
+        k++;
+        while (k < end && (*k == ' ' || *k == '\t' || *k == '\r' || *k == '\n'))
+        {
+            k++;
+        }
+        if (k >= end || *k != '"')
+        {
+            pos = k;
+            continue;
+        }
+
+        v_start = k + 1;
+        v_end = v_start;
+        while (v_end < end && *v_end != '"')
+        {
+            if (*v_end == '\\')
+            {
+                return false;
+            }
+            v_end++;
+        }
+        if (v_end >= end)
+        {
+            return false;
+        }
+
+        out_len = (size_t)(v_end - v_start);
+        if (out_len >= value_out_size)
+        {
+            out_len = value_out_size - 1;
+        }
+        memcpy(value_out, v_start, out_len);
+        value_out[out_len] = '\0';
+        return true;
+    }
+
+    return false;
+}
+
+static bool prv_is_numeric_version_string(const char *version)
+{
+    const char *p;
+
+    if (version == NULL || version[0] == '\0')
+    {
+        return false;
+    }
+
+    p = version;
+    while (*p != '\0')
+    {
+        if (!isdigit((unsigned char)*p) && *p != '.')
+        {
+            return false;
+        }
+        p++;
+    }
+
+    return true;
+}
+
+static int prv_compare_numeric_versions(const char *left, const char *right)
+{
+    const char *l = left;
+    const char *r = right;
+
+    while ((*l != '\0') || (*r != '\0'))
+    {
+        uint32_t lv = 0;
+        uint32_t rv = 0;
+
+        while (*l != '\0' && *l != '.')
+        {
+            lv = (lv * 10U) + (uint32_t)(*l - '0');
+            l++;
+        }
+
+        while (*r != '\0' && *r != '.')
+        {
+            rv = (rv * 10U) + (uint32_t)(*r - '0');
+            r++;
+        }
+
+        if (lv < rv)
+        {
+            return -1;
+        }
+        if (lv > rv)
+        {
+            return 1;
+        }
+
+        if (*l == '.')
+        {
+            l++;
+        }
+        if (*r == '.')
+        {
+            r++;
+        }
+    }
+
+    return 0;
+}
+
+static int prv_compare_version_strings(const char *left, const char *right)
+{
+    if (left == NULL || right == NULL)
+    {
+        return 0;
+    }
+
+    if (prv_is_numeric_version_string(left) && prv_is_numeric_version_string(right))
+    {
+        return prv_compare_numeric_versions(left, right);
+    }
+
+    return strcmp(left, right);
+}
+
+static void prv_check_registration_ota_need(const coap_packet_t *packet)
+{
+    char server_version[64] = {0};
+    const char *client_version;
+    int cmp;
+
+    if (packet == NULL || packet->payload == NULL || packet->payload_len == 0)
+    {
+        return;
+    }
+
+    if (!prv_extract_json_string_field(packet->payload,
+                                       packet->payload_len,
+                                       "\"server_version\"",
+                                       server_version,
+                                       sizeof(server_version)))
+    {
+        printf("[ota_check] registration ack skipped: server_version not present in payload (%u bytes)\n",
+               (unsigned)packet->payload_len);
+        return;
+    }
+
+    if (server_version[0] == '\0')
+    {
+        printf("[ota_check] registration ack skipped: server_version is empty\n");
+        return;
+    }
+
+    client_version = prv_get_client_version_for_query();
+    if (client_version == NULL || client_version[0] == '\0')
+    {
+        printf("[ota_check] registration ack skipped: local client version unavailable (server_version=%s)\n",
+               server_version);
+        return;
+    }
+
+    cmp = prv_compare_version_strings(client_version, server_version);
+    if (cmp < 0)
+    {
+        printf("[ota_check] registration ack: ota_needed=1 (client_version=%s server_version=%s)\n",
+               client_version,
+               server_version);
+    }
+    else
+    {
+        printf("[ota_check] registration ack: ota_needed=0 (client_version=%s server_version=%s)\n",
+               client_version,
+               server_version);
+    }
+}
+
 static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                                              const registration_data_t *dataP,
                                              const coap_packet_t *packet)
@@ -926,6 +1229,7 @@ static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                                                                 &server_sec_of_year);
         contextP->registrationServerSecOfYearValid = has_server_sec_of_year;
         contextP->registrationServerSecOfYear = has_server_sec_of_year ? server_sec_of_year : 0;
+        prv_check_registration_ota_need(packet);
     }
 
 #ifdef ESP_PLATFORM
