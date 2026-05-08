@@ -73,6 +73,7 @@
 extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
 __attribute__((weak)) int lwm2m_sample_apply_json_config(const uint8_t *json, size_t len);
+__attribute__((weak)) const char *lwm2m_client_get_firmware_version(void);
 
 #ifdef ESP_PLATFORM
 static const char *WAKAAMA_REG_TAG = "wakaama_reg";
@@ -100,11 +101,42 @@ static bool prv_payload_looks_like_json(const uint8_t *payload, size_t len)
     return (i < len && payload[i] == '{');
 }
 
+static const char *prv_get_client_version_for_query(void)
+{
+    const char *version = NULL;
+    const char *cursor = NULL;
+
+    if (!lwm2m_client_get_firmware_version)
+    {
+        return NULL;
+    }
+
+    version = lwm2m_client_get_firmware_version();
+    if (!version || version[0] == '\0')
+    {
+        return NULL;
+    }
+
+    cursor = version;
+    while (*cursor != '\0')
+    {
+        /* Keep URI query values simple and avoid delimiters that break parsing. */
+        if (*cursor == '&' || *cursor == '?' || *cursor == '#' || *cursor == '=')
+        {
+            return NULL;
+        }
+        cursor++;
+    }
+
+    return version;
+}
+
 static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
                                           lwm2m_server_t * server)
 {
     int index;
     int res;
+    const char *client_version;
     uint8_t buffer[21];
 
     index = strlen(QUERY_STARTER QUERY_VERSION_FULL QUERY_DELIMITER QUERY_NAME);
@@ -184,6 +216,13 @@ static int prv_getRegistrationQueryLength(lwm2m_context_t * contextP,
         index += res;
     }
 
+    client_version = prv_get_client_version_for_query();
+    if (client_version)
+    {
+        index += strlen("&cv=");
+        index += (int)strlen(client_version);
+    }
+
     return index + 1;
 }
 
@@ -194,6 +233,7 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
 {
     size_t index;
     int res;
+    const char *client_version;
 
     res = utils_stringCopy(buffer, length, QUERY_STARTER QUERY_VERSION_FULL QUERY_DELIMITER QUERY_NAME);
     if (res < 0) return 0;
@@ -294,6 +334,18 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
         index += res;
     }
 
+    client_version = prv_get_client_version_for_query();
+    if (client_version)
+    {
+        res = utils_stringCopy(buffer + index, length - index, "&cv=");
+        if (res < 0) return 0;
+        index += res;
+
+        res = utils_stringCopy(buffer + index, length - index, client_version);
+        if (res < 0) return 0;
+        index += res;
+    }
+
     if(index < length)
     {
         buffer[index++] = '\0';
@@ -304,6 +356,51 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
     }
 
     return index;
+}
+
+static int prv_getRegistrationUpdateQueryLength(void)
+{
+    const char *client_version = prv_get_client_version_for_query();
+    if (!client_version)
+    {
+        return 0;
+    }
+
+    return (int)(strlen("cv=") + strlen(client_version) + 1);
+}
+
+static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
+{
+    size_t index = 0;
+    int res;
+    const char *client_version = prv_get_client_version_for_query();
+
+    if (!buffer || length == 0 || !client_version)
+    {
+        return 0;
+    }
+
+    res = utils_stringCopy(buffer + index, length - index, "cv=");
+    if (res < 0)
+    {
+        return 0;
+    }
+    index += (size_t)res;
+
+    res = utils_stringCopy(buffer + index, length - index, client_version);
+    if (res < 0)
+    {
+        return 0;
+    }
+    index += (size_t)res;
+
+    if (index >= length)
+    {
+        return 0;
+    }
+    buffer[index++] = '\0';
+
+    return (int)index;
 }
 
 #ifndef LWM2M_VERSION_1_0
@@ -1065,8 +1162,13 @@ static void prv_handleRegistrationUpdateReply(lwm2m_context_t * contextP,
     }
     if (packet != NULL && packet->code != COAP_231_CONTINUE)
     {
-        lwm2m_free(dataP->payload);
-        transaction_free_userData(contextP, transacP);
+        char * query = dataP->query;
+        uint8_t * payload = dataP->payload;
+        if (transaction_free_userData(contextP, transacP))
+        {
+            lwm2m_free(query);
+            lwm2m_free(payload);
+        }
     }
 }
 
@@ -1188,6 +1290,8 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
                                   bool withObjects)
 {
     lwm2m_transaction_t * transaction;
+    char * query = NULL;
+    int query_length;
     uint8_t * payload = NULL;
     int payload_length;
 
@@ -1196,12 +1300,31 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
 
     coap_set_header_uri_path(transaction->message, server->location);
 
+    query_length = prv_getRegistrationUpdateQueryLength();
+    if (query_length > 0)
+    {
+        query = (char *)lwm2m_malloc((size_t)query_length);
+        if (!query)
+        {
+            transaction_free(transaction);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        if (prv_getRegistrationUpdateQuery(query, (size_t)query_length) != query_length)
+        {
+            transaction_free(transaction);
+            lwm2m_free(query);
+            return COAP_500_INTERNAL_SERVER_ERROR;
+        }
+        coap_set_header_uri_query(transaction->message, query);
+    }
+
     if (withObjects == true)
     {
         payload_length = object_getRegisterPayloadBufferLength(contextP);
         if(payload_length == 0)
         {
             transaction_free(transaction);
+            lwm2m_free(query);
             return COAP_500_INTERNAL_SERVER_ERROR;
         }
 
@@ -1209,6 +1332,7 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
         if(!payload)
         {
             transaction_free(transaction);
+            lwm2m_free(query);
             return COAP_500_INTERNAL_SERVER_ERROR;
         }
 
@@ -1217,12 +1341,14 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
         {
             transaction_free(transaction);
             lwm2m_free(payload);
+            lwm2m_free(query);
             return COAP_500_INTERNAL_SERVER_ERROR;
         }
 
         if (!transaction_set_payload(transaction, payload, (size_t)payload_length)) {
             transaction_free(transaction);
             lwm2m_free(payload);
+            lwm2m_free(query);
             return COAP_500_INTERNAL_SERVER_ERROR;
         }
     }
@@ -1231,9 +1357,11 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
     if (dataP == NULL){
         transaction_free(transaction);
         lwm2m_free(payload);
+        lwm2m_free(query);
         return COAP_500_INTERNAL_SERVER_ERROR;
     }
 
+    dataP->query = query;
     dataP->payload = payload;
     dataP->server = server;
     dataP->query = NULL;
