@@ -75,6 +75,8 @@ extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
 __attribute__((weak)) int lwm2m_sample_apply_json_config(const uint8_t *json, size_t len);
 __attribute__((weak)) const char *lwm2m_client_get_firmware_version(void);
+__attribute__((weak)) void lwm2m_client_on_registration_ota_needed(const char *client_version,
+                                                                    const char *server_version);
 __attribute__((weak)) int lwm2m_sample_get_i2c_script_missing(void);
 __attribute__((weak)) int lwm2m_sample_get_rs485_script_missing(void);
 
@@ -1159,6 +1161,7 @@ static void prv_check_registration_ota_need(const coap_packet_t *packet)
     char server_version[64] = {0};
     const char *client_version;
     int cmp;
+    int ota_needed;
 
     if (packet == NULL || packet->payload == NULL || packet->payload_len == 0)
     {
@@ -1191,15 +1194,21 @@ static void prv_check_registration_ota_need(const coap_packet_t *packet)
     }
 
     cmp = prv_compare_version_strings(client_version, server_version);
-    if (cmp < 0)
+    ota_needed = (cmp != 0) ? 1 : 0;
+    if (ota_needed)
     {
-        printf("[ota_check] registration ack: ota_needed=1 (client_version=%s server_version=%s)\n",
+        printf("[ota_check] registration ack: ota_needed=1 (version mismatch; client_version=%s server_version=%s)\n",
                client_version,
                server_version);
+
+        if (lwm2m_client_on_registration_ota_needed)
+        {
+            lwm2m_client_on_registration_ota_needed(client_version, server_version);
+        }
     }
     else
     {
-        printf("[ota_check] registration ack: ota_needed=0 (client_version=%s server_version=%s)\n",
+        printf("[ota_check] registration ack: ota_needed=0 (versions match; client_version=%s server_version=%s)\n",
                client_version,
                server_version);
     }
