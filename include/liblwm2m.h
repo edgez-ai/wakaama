@@ -729,6 +729,7 @@ typedef struct _lwm2m_client_
     char *                  name;
     lwm2m_version_t         version;
     uint32_t                sampleConfigVersion;
+    char *                  clientVersion;
     lwm2m_binding_t         binding;
     char *                  msisdn;
     char *                  altPath;

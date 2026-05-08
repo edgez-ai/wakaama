@@ -1259,6 +1259,8 @@ static int prv_getParameters(multi_option_t * query,
                              char ** msisdnP,
                              lwm2m_binding_t * bindingP,
                              lwm2m_version_t * versionP,
+                             char ** clientVersionP,
+                             bool * clientVersionSetP,
                              uint32_t * sampleVersionP,
                              bool * sampleVersionSetP)
 {
@@ -1267,6 +1269,8 @@ static int prv_getParameters(multi_option_t * query,
     *msisdnP = NULL;
     *bindingP = 0;
     *versionP = VERSION_MISSING;
+    *clientVersionP = NULL;
+    *clientVersionSetP = false;
     *sampleVersionP = 0;
     *sampleVersionSetP = false;
 
@@ -1326,6 +1330,43 @@ static int prv_getParameters(multi_option_t * query,
             if (query->len == QUERY_BINDING_LEN) goto error;
 
             *bindingP |= utils_stringToBinding(query->data + QUERY_BINDING_LEN, query->len - QUERY_BINDING_LEN);
+        }
+        else if ((query->len > 3 && lwm2m_strncmp((char *)query->data, "cv=", 3) == 0) ||
+                 (query->len > 15 && lwm2m_strncmp((char *)query->data, "client_version=", 15) == 0) ||
+                 (query->len > 3 && lwm2m_strncmp((char *)query->data, "fw=", 3) == 0) ||
+                 (query->len > 17 && lwm2m_strncmp((char *)query->data, "firmware_version=", 17) == 0))
+        {
+            uint16_t valueStart = 0;
+            uint16_t valueLen;
+
+            if (*clientVersionSetP) goto error;
+
+            if (lwm2m_strncmp((char *)query->data, "cv=", 3) == 0)
+            {
+                valueStart = 3;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "client_version=", 15) == 0)
+            {
+                valueStart = 15;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "fw=", 3) == 0)
+            {
+                valueStart = 3;
+            }
+            else
+            {
+                valueStart = 17;
+            }
+
+            if (query->len == valueStart) goto error;
+
+            valueLen = query->len - valueStart;
+            *clientVersionP = (char *)lwm2m_malloc((size_t)valueLen + 1);
+            if (*clientVersionP == NULL) goto error;
+
+            memcpy(*clientVersionP, query->data + valueStart, valueLen);
+            (*clientVersionP)[valueLen] = 0;
+            *clientVersionSetP = true;
         }
         else if ((query->len > 3 && lwm2m_strncmp((char *)query->data, "sv=", 3) == 0) ||
                  (query->len > 8 && lwm2m_strncmp((char *)query->data, "version=", 8) == 0) ||
@@ -1390,6 +1431,7 @@ static int prv_getParameters(multi_option_t * query,
 
 error:
     if (*nameP != NULL) lwm2m_free(*nameP);
+    if (*clientVersionP != NULL) lwm2m_free(*clientVersionP);
     if (*msisdnP != NULL) lwm2m_free(*msisdnP);
 
     return -1;
@@ -1812,6 +1854,7 @@ static lwm2m_client_t * prv_getClientByName(lwm2m_context_t * contextP,
 void registration_freeClient(lwm2m_context_t *const context, lwm2m_client_t *clientP) {
     LOG_DBG("Entering");
     if (clientP->name != NULL) lwm2m_free(clientP->name);
+    if (clientP->clientVersion != NULL) lwm2m_free(clientP->clientVersion);
     if (clientP->msisdn != NULL) lwm2m_free(clientP->msisdn);
     if (clientP->altPath != NULL) lwm2m_free(clientP->altPath);
     prv_freeClientObjectList(clientP->objectList);
@@ -1872,10 +1915,13 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
     case COAP_POST:
     {
         char * name = NULL;
+        char * clientVersion = NULL;
+        char * previousClientVersion = NULL;
         uint32_t lifetime;
         char * msisdn;
         char * altPath;
         lwm2m_version_t version;
+        bool clientVersionSet;
         uint32_t sampleVersion;
         bool sampleVersionSet;
         lwm2m_binding_t binding;
@@ -1889,13 +1935,23 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         uint8_t *ackPayloadCopy = NULL;
         size_t ackPayloadLen = 0;
 
-        if (0 != prv_getParameters(message->uri_query, &name, &lifetime, &msisdn, &binding, &version, &sampleVersion, &sampleVersionSet))
+        if (0 != prv_getParameters(message->uri_query,
+                                   &name,
+                                   &lifetime,
+                                   &msisdn,
+                                   &binding,
+                                   &version,
+                                   &clientVersion,
+                                   &clientVersionSet,
+                                   &sampleVersion,
+                                   &sampleVersionSet))
         {
             return COAP_400_BAD_REQUEST;
         }
         if (message->content_type != (coap_content_type_t)LWM2M_CONTENT_LINK &&
             message->content_type != (coap_content_type_t)LWM2M_CONTENT_TEXT) {
             lwm2m_free(name);
+            if (clientVersion != NULL) lwm2m_free(clientVersion);
             return COAP_400_BAD_REQUEST;
         }
 
@@ -1908,12 +1964,14 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (version == VERSION_MISSING)
             {
                 if (name != NULL) lwm2m_free(name);
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
                 if (msisdn != NULL) lwm2m_free(msisdn);
                 return COAP_400_BAD_REQUEST;
             }
             // Endpoint client name is mandatory
             if (name == NULL)
             {
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
                 if (msisdn != NULL) lwm2m_free(msisdn);
                 return COAP_400_BAD_REQUEST;
             }
@@ -1921,6 +1979,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (objects == NULL)
             {
                 lwm2m_free(name);
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
                 if (msisdn != NULL) lwm2m_free(msisdn);
                 return COAP_400_BAD_REQUEST;
             }
@@ -1935,6 +1994,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 break;
             default:
                 lwm2m_free(name);
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
                 if (msisdn != NULL) lwm2m_free(msisdn);
                 return COAP_412_PRECONDITION_FAILED;
             }
@@ -1963,9 +2023,11 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 // we reset this registration
                 hadExistingClient = true;
                 previousSampleVersion = clientP->sampleConfigVersion;
+                previousClientVersion = clientP->clientVersion;
                 lwm2m_free(clientP->name);
                 if (clientP->msisdn != NULL) lwm2m_free(clientP->msisdn);
                 if (clientP->altPath != NULL) lwm2m_free(clientP->altPath);
+                clientP->clientVersion = NULL;
                 prv_freeClientObjectList(clientP->objectList);
                 clientP->objectList = NULL;
             }
@@ -1976,6 +2038,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 {
                     lwm2m_free(name);
                     lwm2m_free(altPath);
+                    if (clientVersion != NULL) lwm2m_free(clientVersion);
                     if (msisdn != NULL) lwm2m_free(msisdn);
                     prv_freeClientObjectList(objects);
                     return COAP_500_INTERNAL_SERVER_ERROR;
@@ -1997,6 +2060,20 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             else
             {
                 clientP->sampleConfigVersion = 0;
+            }
+            if (clientVersionSet)
+            {
+                clientP->clientVersion = clientVersion;
+                clientVersion = NULL;
+            }
+            else if (hadExistingClient)
+            {
+                clientP->clientVersion = previousClientVersion;
+                previousClientVersion = NULL;
+            }
+            else
+            {
+                clientP->clientVersion = NULL;
             }
             clientP->binding = binding;
             clientP->msisdn = msisdn;
@@ -2046,15 +2123,24 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         else
         {
             // Registration update
-            if (LWM2M_URI_IS_SET_INSTANCE(uriP)) return COAP_400_BAD_REQUEST;
+            if (LWM2M_URI_IS_SET_INSTANCE(uriP))
+            {
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
+                return COAP_400_BAD_REQUEST;
+            }
 
             clientP = (lwm2m_client_t *)lwm2m_list_find((lwm2m_list_t *)contextP->clientList, uriP->objectId);
-            if (clientP == NULL) return COAP_404_NOT_FOUND;
+            if (clientP == NULL)
+            {
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
+                return COAP_404_NOT_FOUND;
+            }
 
             // Endpoint client name MUST NOT be present
             if (name != NULL)
             {
                 lwm2m_free(name);
+                if (clientVersion != NULL) lwm2m_free(clientVersion);
                 if (msisdn != NULL) lwm2m_free(msisdn);
                 return COAP_400_BAD_REQUEST;
             }
@@ -2066,6 +2152,12 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             if (sampleVersionSet)
             {
                 clientP->sampleConfigVersion = sampleVersion;
+            }
+            if (clientVersionSet)
+            {
+                if (clientP->clientVersion != NULL) lwm2m_free(clientP->clientVersion);
+                clientP->clientVersion = clientVersion;
+                clientVersion = NULL;
             }
             if (msisdn != NULL)
             {
@@ -2159,6 +2251,15 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 }
             }
             result = COAP_204_CHANGED;
+        }
+
+        if (previousClientVersion != NULL)
+        {
+            lwm2m_free(previousClientVersion);
+        }
+        if (clientVersion != NULL)
+        {
+            lwm2m_free(clientVersion);
         }
     }
     break;
