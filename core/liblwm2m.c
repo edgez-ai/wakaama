@@ -599,13 +599,13 @@ int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP)
 
     if (contextP == NULL || !contextP->registrationUptimeSynced)
     {
-        return -1;
+        return 0;
     }
 
     synced_ms = lwm2m_registration_uptime_ms(contextP);
     if (synced_ms < 0)
     {
-        return -1;
+        return 0;
     }
 
 #ifdef ESP_PLATFORM
@@ -615,7 +615,7 @@ int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP)
         time_t now_sec = lwm2m_gettime();
         if (now_sec < 0)
         {
-            return -1;
+            return 0;
         }
         return synced_ms - (((int64_t)now_sec) * 1000);
     }
