@@ -1332,7 +1332,9 @@ static int prv_getParameters(multi_option_t * query,
             *bindingP |= utils_stringToBinding(query->data + QUERY_BINDING_LEN, query->len - QUERY_BINDING_LEN);
         }
         else if ((query->len > 3 && lwm2m_strncmp((char *)query->data, "cv=", 3) == 0) ||
-                 (query->len > 15 && lwm2m_strncmp((char *)query->data, "client_version=", 15) == 0) ||
+             (query->len > 15 && lwm2m_strncmp((char *)query->data, "client_version=", 15) == 0) ||
+             (query->len > 14 && lwm2m_strncmp((char *)query->data, "clientVersion=", 14) == 0) ||
+             (query->len > 15 && lwm2m_strncmp((char *)query->data, "client-version=", 15) == 0) ||
                  (query->len > 3 && lwm2m_strncmp((char *)query->data, "fw=", 3) == 0) ||
                  (query->len > 17 && lwm2m_strncmp((char *)query->data, "firmware_version=", 17) == 0))
         {
@@ -1346,6 +1348,14 @@ static int prv_getParameters(multi_option_t * query,
                 valueStart = 3;
             }
             else if (lwm2m_strncmp((char *)query->data, "client_version=", 15) == 0)
+            {
+                valueStart = 15;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "clientVersion=", 14) == 0)
+            {
+                valueStart = 14;
+            }
+            else if (lwm2m_strncmp((char *)query->data, "client-version=", 15) == 0)
             {
                 valueStart = 15;
             }
@@ -2075,6 +2085,13 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             {
                 clientP->clientVersion = NULL;
             }
+
+            fprintf(stdout,
+                    "edgez registration: endpoint=%s client_version=%s sample_version=%u\n",
+                    clientP->name ? clientP->name : "",
+                    (clientP->clientVersion && clientP->clientVersion[0] != '\0') ? clientP->clientVersion : "",
+                    (unsigned)clientP->sampleConfigVersion);
+
             clientP->binding = binding;
             clientP->msisdn = msisdn;
             clientP->altPath = altPath;
@@ -2159,6 +2176,13 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                 clientP->clientVersion = clientVersion;
                 clientVersion = NULL;
             }
+
+            fprintf(stdout,
+                    "edgez registration update: endpoint=%s client_version=%s sample_version=%u\n",
+                    clientP->name ? clientP->name : "",
+                    (clientP->clientVersion && clientP->clientVersion[0] != '\0') ? clientP->clientVersion : "",
+                    (unsigned)clientP->sampleConfigVersion);
+
             if (msisdn != NULL)
             {
                 if (clientP->msisdn != NULL) lwm2m_free(clientP->msisdn);
