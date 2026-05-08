@@ -1262,8 +1262,13 @@ static int prv_getParameters(multi_option_t * query,
                              char ** clientVersionP,
                              bool * clientVersionSetP,
                              uint32_t * sampleVersionP,
-                             bool * sampleVersionSetP)
+                             bool * sampleVersionSetP,
+                             bool *i2cMissingP,
+                             bool *rs485MissingP)
 {
+    bool i2cMissingSeen = false;
+    bool rs485MissingSeen = false;
+
     *nameP = NULL;
     *lifetimeP = 0;
     *msisdnP = NULL;
@@ -1273,6 +1278,8 @@ static int prv_getParameters(multi_option_t * query,
     *clientVersionSetP = false;
     *sampleVersionP = 0;
     *sampleVersionSetP = false;
+    *i2cMissingP = false;
+    *rs485MissingP = false;
 
     while (query != NULL)
     {
@@ -1413,6 +1420,56 @@ static int prv_getParameters(multi_option_t * query,
                 *sampleVersionP = (*sampleVersionP * 10u) + (uint32_t)(query->data[i] - '0');
             }
             *sampleVersionSetP = true;
+        }
+        else if ((query->len > 12 && lwm2m_strncmp((char *)query->data, "i2c_missing=", 12) == 0) ||
+                 (query->len > 5 && lwm2m_strncmp((char *)query->data, "i2cm=", 5) == 0))
+        {
+            uint16_t valueStart = (lwm2m_strncmp((char *)query->data, "i2cm=", 5) == 0) ? 5 : 12;
+
+            if (i2cMissingSeen || query->len == valueStart) goto error;
+
+            if (query->len - valueStart == 1 && query->data[valueStart] >= '0' && query->data[valueStart] <= '1')
+            {
+                *i2cMissingP = (query->data[valueStart] == '1');
+            }
+            else if (query->len - valueStart == 4 && lwm2m_strncmp((char *)query->data + valueStart, "true", 4) == 0)
+            {
+                *i2cMissingP = true;
+            }
+            else if (query->len - valueStart == 5 && lwm2m_strncmp((char *)query->data + valueStart, "false", 5) == 0)
+            {
+                *i2cMissingP = false;
+            }
+            else
+            {
+                goto error;
+            }
+            i2cMissingSeen = true;
+        }
+        else if ((query->len > 14 && lwm2m_strncmp((char *)query->data, "rs485_missing=", 14) == 0) ||
+                 (query->len > 7 && lwm2m_strncmp((char *)query->data, "rs485m=", 7) == 0))
+        {
+            uint16_t valueStart = (lwm2m_strncmp((char *)query->data, "rs485m=", 7) == 0) ? 7 : 14;
+
+            if (rs485MissingSeen || query->len == valueStart) goto error;
+
+            if (query->len - valueStart == 1 && query->data[valueStart] >= '0' && query->data[valueStart] <= '1')
+            {
+                *rs485MissingP = (query->data[valueStart] == '1');
+            }
+            else if (query->len - valueStart == 4 && lwm2m_strncmp((char *)query->data + valueStart, "true", 4) == 0)
+            {
+                *rs485MissingP = true;
+            }
+            else if (query->len - valueStart == 5 && lwm2m_strncmp((char *)query->data + valueStart, "false", 5) == 0)
+            {
+                *rs485MissingP = false;
+            }
+            else
+            {
+                goto error;
+            }
+            rs485MissingSeen = true;
         }
 #ifndef LWM2M_VERSION_1_0
         else if (lwm2m_strncmp((char *)query->data, QUERY_QUEUE_MODE, QUERY_QUEUE_MODE_LEN) == 0)
@@ -1934,6 +1991,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
         bool clientVersionSet;
         uint32_t sampleVersion;
         bool sampleVersionSet;
+        bool i2cMissing = false;
+        bool rs485Missing = false;
         lwm2m_binding_t binding;
         lwm2m_client_object_t * objects;
         lwm2m_media_type_t format;
@@ -1954,7 +2013,9 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
                                    &clientVersion,
                                    &clientVersionSet,
                                    &sampleVersion,
-                                   &sampleVersionSet))
+                                   &sampleVersionSet,
+                                   &i2cMissing,
+                                   &rs485Missing))
         {
             return COAP_400_BAD_REQUEST;
         }
@@ -2071,6 +2132,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             {
                 clientP->sampleConfigVersion = 0;
             }
+            clientP->i2cScriptMissing = i2cMissing;
+            clientP->rs485ScriptMissing = rs485Missing;
             if (clientVersionSet)
             {
                 clientP->clientVersion = clientVersion;
@@ -2087,10 +2150,12 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             }
 
             fprintf(stdout,
-                    "edgez registration: endpoint=%s client_version=%s sample_version=%u\n",
+                    "edgez registration: endpoint=%s client_version=%s sample_version=%u i2c_missing=%u rs485_missing=%u\n",
                     clientP->name ? clientP->name : "",
                     (clientP->clientVersion && clientP->clientVersion[0] != '\0') ? clientP->clientVersion : "",
-                    (unsigned)clientP->sampleConfigVersion);
+                    (unsigned)clientP->sampleConfigVersion,
+                    (unsigned)clientP->i2cScriptMissing,
+                    (unsigned)clientP->rs485ScriptMissing);
 
             clientP->binding = binding;
             clientP->msisdn = msisdn;
@@ -2170,6 +2235,8 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             {
                 clientP->sampleConfigVersion = sampleVersion;
             }
+            clientP->i2cScriptMissing = i2cMissing;
+            clientP->rs485ScriptMissing = rs485Missing;
             if (clientVersionSet)
             {
                 if (clientP->clientVersion != NULL) lwm2m_free(clientP->clientVersion);
@@ -2178,10 +2245,12 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             }
 
             fprintf(stdout,
-                    "edgez registration update: endpoint=%s client_version=%s sample_version=%u\n",
+                    "edgez registration update: endpoint=%s client_version=%s sample_version=%u i2c_missing=%u rs485_missing=%u\n",
                     clientP->name ? clientP->name : "",
                     (clientP->clientVersion && clientP->clientVersion[0] != '\0') ? clientP->clientVersion : "",
-                    (unsigned)clientP->sampleConfigVersion);
+                    (unsigned)clientP->sampleConfigVersion,
+                    (unsigned)clientP->i2cScriptMissing,
+                    (unsigned)clientP->rs485ScriptMissing);
 
             if (msisdn != NULL)
             {
