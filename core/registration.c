@@ -391,11 +391,33 @@ static int prv_getRegistrationQuery(lwm2m_context_t * contextP,
 static int prv_getRegistrationUpdateQueryLength(void)
 {
     int length = 0;
+    int res;
+    uint8_t buffer[21];
     const char *client_version = prv_get_client_version_for_query();
+
+    if (lwm2m_sample_get_config_version)
+    {
+        uint32_t sample_ver = lwm2m_sample_get_config_version();
+        res = utils_intToText(sample_ver, buffer, sizeof(buffer));
+        if (res == 0)
+        {
+            return 0;
+        }
+        length += (int)strlen("sv=") + res;
+    }
+
     if (client_version)
     {
+        if (length > 0)
+        {
+            length += 1;
+        }
         length += (int)(strlen("cv=") + strlen(client_version));
-        /* '&' separator between cv=... and i2c_missing=... */
+    }
+
+    if (length > 0)
+    {
+        /* '&' separator before i2c_missing=... */
         length += 1;
     }
 
@@ -407,6 +429,7 @@ static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
 {
     size_t index = 0;
     int res;
+    bool need_separator = false;
     const char *client_version = prv_get_client_version_for_query();
     int i2c_missing = 0;
     int rs485_missing = 0;
@@ -425,8 +448,37 @@ static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
         rs485_missing = lwm2m_sample_get_rs485_script_missing() ? 1 : 0;
     }
 
+    if (lwm2m_sample_get_config_version)
+    {
+        uint32_t sample_ver = lwm2m_sample_get_config_version();
+
+        res = utils_stringCopy(buffer + index, length - index, "sv=");
+        if (res < 0)
+        {
+            return 0;
+        }
+        index += (size_t)res;
+
+        res = utils_intToText(sample_ver, (uint8_t *)buffer + index, length - index);
+        if (res == 0)
+        {
+            return 0;
+        }
+        index += (size_t)res;
+        need_separator = true;
+    }
+
     if (client_version)
     {
+        if (need_separator)
+        {
+            if (index >= length)
+            {
+                return 0;
+            }
+            buffer[index++] = '&';
+        }
+
         res = utils_stringCopy(buffer + index, length - index, "cv=");
         if (res < 0)
         {
@@ -441,6 +493,11 @@ static int prv_getRegistrationUpdateQuery(char *buffer, size_t length)
         }
         index += (size_t)res;
 
+        need_separator = true;
+    }
+
+    if (need_separator)
+    {
         if (index >= length)
         {
             return 0;
