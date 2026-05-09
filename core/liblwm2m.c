@@ -495,6 +495,9 @@ next_step:
         contextP->registrationLastRttMs = 0;
         contextP->registrationServerSecOfYearValid = false;
         contextP->registrationServerSecOfYear = 0;
+        contextP->registrationOtaInfoValid = false;
+        contextP->registrationOtaNeeded = false;
+        contextP->registrationServerVersion[0] = '\0';
         int result = registration_start(contextP, true);
         LWM2M_CORE_LOGI("lwm2m_step registration_start result=%d", result);
         if (COAP_NO_ERROR != result) return result;
@@ -645,4 +648,24 @@ uint32_t lwm2m_registration_server_sec_of_year(const lwm2m_context_t *contextP)
     }
 
     return contextP->registrationServerSecOfYear;
+}
+
+bool lwm2m_registration_ota_info_is_valid(const lwm2m_context_t *contextP)
+{
+    return (contextP != NULL && contextP->registrationOtaInfoValid);
+}
+
+bool lwm2m_registration_ota_needed(const lwm2m_context_t *contextP)
+{
+    return (contextP != NULL && contextP->registrationOtaInfoValid && contextP->registrationOtaNeeded);
+}
+
+const char *lwm2m_registration_server_version(const lwm2m_context_t *contextP)
+{
+    if (contextP == NULL || !contextP->registrationOtaInfoValid)
+    {
+        return NULL;
+    }
+
+    return contextP->registrationServerVersion;
 }

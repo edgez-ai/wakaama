@@ -75,8 +75,6 @@ extern char serialNumber[64];
 __attribute__((weak)) uint32_t lwm2m_sample_get_config_version(void);
 __attribute__((weak)) int lwm2m_sample_apply_json_config(const uint8_t *json, size_t len);
 __attribute__((weak)) const char *lwm2m_client_get_firmware_version(void);
-__attribute__((weak)) void lwm2m_client_on_registration_ota_needed(const char *client_version,
-                                                                    const char *server_version);
 __attribute__((weak)) int lwm2m_sample_get_i2c_script_missing(void);
 __attribute__((weak)) int lwm2m_sample_get_rs485_script_missing(void);
 
@@ -397,6 +395,8 @@ static int prv_getRegistrationUpdateQueryLength(void)
     if (client_version)
     {
         length += (int)(strlen("cv=") + strlen(client_version));
+        /* '&' separator between cv=... and i2c_missing=... */
+        length += 1;
     }
 
     length += (int)strlen("i2c_missing=0&rs485_missing=0");
@@ -1156,12 +1156,21 @@ static int prv_compare_version_strings(const char *left, const char *right)
     return strcmp(left, right);
 }
 
-static void prv_check_registration_ota_need(const coap_packet_t *packet)
+static void prv_check_registration_ota_need(lwm2m_context_t *contextP, const coap_packet_t *packet)
 {
     char server_version[64] = {0};
     const char *client_version;
     int cmp;
     int ota_needed;
+
+    if (contextP == NULL)
+    {
+        return;
+    }
+
+    contextP->registrationOtaInfoValid = false;
+    contextP->registrationOtaNeeded = false;
+    contextP->registrationServerVersion[0] = '\0';
 
     if (packet == NULL || packet->payload == NULL || packet->payload_len == 0)
     {
@@ -1195,16 +1204,17 @@ static void prv_check_registration_ota_need(const coap_packet_t *packet)
 
     cmp = prv_compare_version_strings(client_version, server_version);
     ota_needed = (cmp != 0) ? 1 : 0;
+    contextP->registrationOtaInfoValid = true;
+    contextP->registrationOtaNeeded = (ota_needed != 0);
+    utils_stringCopy(contextP->registrationServerVersion,
+                     sizeof(contextP->registrationServerVersion),
+                     server_version);
+
     if (ota_needed)
     {
         printf("[ota_check] registration ack: ota_needed=1 (version mismatch; client_version=%s server_version=%s)\n",
                client_version,
                server_version);
-
-        if (lwm2m_client_on_registration_ota_needed)
-        {
-            lwm2m_client_on_registration_ota_needed(client_version, server_version);
-        }
     }
     else
     {
@@ -1238,7 +1248,7 @@ static void prv_updateRegistrationUptimeSync(lwm2m_context_t *contextP,
                                                                 &server_sec_of_year);
         contextP->registrationServerSecOfYearValid = has_server_sec_of_year;
         contextP->registrationServerSecOfYear = has_server_sec_of_year ? server_sec_of_year : 0;
-        prv_check_registration_ota_need(packet);
+        prv_check_registration_ota_need(contextP, packet);
     }
 
 #ifdef ESP_PLATFORM
@@ -1677,7 +1687,6 @@ static int prv_updateRegistration(lwm2m_context_t * contextP,
     dataP->query = query;
     dataP->payload = payload;
     dataP->server = server;
-    dataP->query = NULL;
 #ifdef ESP_PLATFORM
     dataP->tx_mono_us = ((int64_t)esp_log_timestamp()) * 1000LL;
 #else

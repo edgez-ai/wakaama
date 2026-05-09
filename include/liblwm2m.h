@@ -66,6 +66,8 @@ extern "C" {
 #include <stdbool.h>
 #include <time.h>
 
+#define LWM2M_REG_SERVER_VERSION_MAX_LEN 64
+
 #ifdef LWM2M_SERVER_MODE
 #ifndef LWM2M_SUPPORT_JSON
 #define LWM2M_SUPPORT_JSON
@@ -801,6 +803,9 @@ struct _lwm2m_context_
     uint32_t             registrationLastRttMs;
     bool                 registrationServerSecOfYearValid;
     uint32_t             registrationServerSecOfYear;
+    bool                 registrationOtaInfoValid;
+    bool                 registrationOtaNeeded;
+    char                 registrationServerVersion[LWM2M_REG_SERVER_VERSION_MAX_LEN];
     // Custom bootstrap data to be sent in bootstrap request
     
 #endif
@@ -858,6 +863,9 @@ int64_t lwm2m_registration_uptime_offset_ms(const lwm2m_context_t *contextP);
 uint32_t lwm2m_registration_last_rtt_ms(const lwm2m_context_t *contextP);
 bool lwm2m_registration_server_sec_of_year_is_valid(const lwm2m_context_t *contextP);
 uint32_t lwm2m_registration_server_sec_of_year(const lwm2m_context_t *contextP);
+bool lwm2m_registration_ota_info_is_valid(const lwm2m_context_t *contextP);
+bool lwm2m_registration_ota_needed(const lwm2m_context_t *contextP);
+const char *lwm2m_registration_server_version(const lwm2m_context_t *contextP);
 
 #ifndef LWM2M_VERSION_1_0
 // send resources specified by URIs to the server specified by the server short
