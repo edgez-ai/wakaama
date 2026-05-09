@@ -98,6 +98,8 @@ void lwm2m_device_set_factory_reset_cb(void (*cb)(void));
 lwm2m_object_t * get_object_firmware(void);
 void free_object_firmware(lwm2m_object_t * objectP);
 void display_firmware_object(lwm2m_object_t * objectP);
+bool firmware_object_is_update_in_progress(void);
+bool firmware_object_request_cancel_update(void);
 /*
  * object_location.c
  */
