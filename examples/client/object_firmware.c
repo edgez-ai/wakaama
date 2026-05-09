@@ -37,6 +37,7 @@
  * 7 package version           read
  * 8 update protocol support   read
  * 9 update delivery method    read
+ * 10 failed ota counter       read/write
  */
 
 #include "liblwm2m.h"
@@ -45,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
@@ -68,9 +70,31 @@
 #define RES_O_PKG_VERSION               7
 #define RES_O_UPDATE_PROTOCOL           8
 #define RES_M_UPDATE_METHOD             9
+#define RES_O_FAILED_OTA_COUNTER        10
 
 #define LWM2M_FIRMWARE_PROTOCOL_NUM     4
 #define LWM2M_FIRMWARE_PROTOCOL_NULL    ((uint8_t)-1)
+
+/* LwM2M Firmware Update States (Resource 3) */
+#define FW_STATE_IDLE           0  // Idle
+#define FW_STATE_DOWNLOADING    1  // Downloading
+#define FW_STATE_DOWNLOADED     2  // Downloaded
+#define FW_STATE_UPDATING       3  // Updating
+
+/* LwM2M Firmware Update Results (Resource 5) */
+#define FW_RESULT_INITIAL       0  // Initial value
+#define FW_RESULT_SUCCESS       1  // Firmware updated successfully
+#define FW_RESULT_NOT_ENOUGH_STORAGE 2  // Not enough storage
+#define FW_RESULT_OUT_OF_MEMORY 3  // Out of memory
+#define FW_RESULT_CONNECTION_LOST 4  // Connection lost during download
+#define FW_RESULT_CRC_FAILED    5  // CRC check failure
+#define FW_RESULT_UNSUPPORTED_PKG 6  // Unsupported package type
+#define FW_RESULT_INVALID_URI   7  // Invalid URI
+#define FW_RESULT_UPDATE_FAILED 8  // Firmware update failed
+#define FW_RESULT_UNSUPPORTED_PROTOCOL 9  // Unsupported protocol
+#define FW_OTA_MAX_RETRY_COUNT  3
+
+typedef struct firmware_data_s firmware_data_t;
 
 #ifdef ESP_PLATFORM
 #define FW_TAG "FW_OTA"
@@ -94,6 +118,19 @@ static volatile bool s_fw_ota_in_progress = false;
 static volatile bool s_fw_ota_cancel_requested = false;
 static firmware_data_t *s_fw_active_data = NULL;
 
+struct firmware_data_s
+{
+    uint8_t state;
+    uint8_t result;
+    char pkg_name[256];
+    char pkg_version[256];
+    uint8_t protocol_support[LWM2M_FIRMWARE_PROTOCOL_NUM];
+    uint8_t delivery_method;
+    char package_uri[512];  // Store firmware URL
+    uint32_t failed_ota_counter;
+    lwm2m_context_t *lwm2mH;  // LwM2M context for notifications
+};
+
 bool firmware_object_is_update_in_progress(void)
 {
     return s_fw_ota_in_progress;
@@ -108,48 +145,23 @@ bool firmware_object_request_cancel_update(void)
     if (s_fw_active_data != NULL) {
         s_fw_active_data->result = FW_RESULT_UPDATE_FAILED;
         s_fw_active_data->state = FW_STATE_IDLE;
+        if (s_fw_active_data->failed_ota_counter < UINT32_MAX) {
+            s_fw_active_data->failed_ota_counter++;
+        }
 
         if (s_fw_active_data->lwm2mH != NULL) {
             lwm2m_uri_t uri_state = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_M_STATE};
             lwm2m_uri_t uri_result = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_M_UPDATE_RESULT};
+            lwm2m_uri_t uri_failed_count = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_O_FAILED_OTA_COUNTER};
             lwm2m_resource_value_changed(s_fw_active_data->lwm2mH, &uri_state);
             lwm2m_resource_value_changed(s_fw_active_data->lwm2mH, &uri_result);
+            lwm2m_resource_value_changed(s_fw_active_data->lwm2mH, &uri_failed_count);
         }
     }
 
     s_fw_ota_cancel_requested = true;
     return true;
 }
-
-/* LwM2M Firmware Update States (Resource 3) */
-#define FW_STATE_IDLE           0  // Idle
-#define FW_STATE_DOWNLOADING    1  // Downloading
-#define FW_STATE_DOWNLOADED     2  // Downloaded
-#define FW_STATE_UPDATING       3  // Updating
-
-/* LwM2M Firmware Update Results (Resource 5) */
-#define FW_RESULT_INITIAL       0  // Initial value
-#define FW_RESULT_SUCCESS       1  // Firmware updated successfully
-#define FW_RESULT_NOT_ENOUGH_STORAGE 2  // Not enough storage
-#define FW_RESULT_OUT_OF_MEMORY 3  // Out of memory
-#define FW_RESULT_CONNECTION_LOST 4  // Connection lost during download
-#define FW_RESULT_CRC_FAILED    5  // CRC check failure
-#define FW_RESULT_UNSUPPORTED_PKG 6  // Unsupported package type
-#define FW_RESULT_INVALID_URI   7  // Invalid URI
-#define FW_RESULT_UPDATE_FAILED 8  // Firmware update failed
-#define FW_RESULT_UNSUPPORTED_PROTOCOL 9  // Unsupported protocol
-
-typedef struct
-{
-    uint8_t state;
-    uint8_t result;
-    char pkg_name[256];
-    char pkg_version[256];
-    uint8_t protocol_support[LWM2M_FIRMWARE_PROTOCOL_NUM];
-    uint8_t delivery_method;
-    char package_uri[512];  // Store firmware URL
-    lwm2m_context_t *lwm2mH;  // LwM2M context for notifications
-} firmware_data_t;
 
 static uint8_t prv_firmware_read(lwm2m_context_t *contextP,
                                  uint16_t instanceId,
@@ -173,15 +185,16 @@ static uint8_t prv_firmware_read(lwm2m_context_t *contextP,
     // is the server asking for the full object ?
     if (*numDataP == 0)
     {
-        *dataArrayP = lwm2m_data_new(6);
+        *dataArrayP = lwm2m_data_new(7);
         if (*dataArrayP == NULL) return COAP_500_INTERNAL_SERVER_ERROR;
-        *numDataP = 6;
+        *numDataP = 7;
         (*dataArrayP)[0].id = 3;
         (*dataArrayP)[1].id = 5;
         (*dataArrayP)[2].id = 6;
         (*dataArrayP)[3].id = 7;
         (*dataArrayP)[4].id = 8;
         (*dataArrayP)[5].id = 9;
+        (*dataArrayP)[6].id = 10;
     }
 
     i = 0;
@@ -270,6 +283,12 @@ static uint8_t prv_firmware_read(lwm2m_context_t *contextP,
         case RES_M_UPDATE_METHOD:
             if ((*dataArrayP)[i].type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
             lwm2m_data_encode_int(data->delivery_method, *dataArrayP + i);
+            result = COAP_205_CONTENT;
+            break;
+
+        case RES_O_FAILED_OTA_COUNTER:
+            if ((*dataArrayP)[i].type == LWM2M_TYPE_MULTIPLE_RESOURCE) return COAP_404_NOT_FOUND;
+            lwm2m_data_encode_int((int64_t)data->failed_ota_counter, *dataArrayP + i);
             result = COAP_205_CONTENT;
             break;
 
@@ -365,6 +384,27 @@ static uint8_t prv_firmware_write(lwm2m_context_t *contextP,
             break;
         }
 
+        case RES_O_FAILED_OTA_COUNTER:
+        {
+            int64_t counter = 0;
+            if (lwm2m_data_decode_int(dataArray + i, &counter) != 1 || counter < 0 || counter > INT32_MAX)
+            {
+                result = COAP_400_BAD_REQUEST;
+                break;
+            }
+
+            data->failed_ota_counter = (uint32_t)counter;
+#ifdef ESP_PLATFORM
+            ESP_LOGI(FW_TAG, "Firmware failed OTA counter set to %lu", (unsigned long)data->failed_ota_counter);
+#endif
+            if (data->lwm2mH != NULL) {
+                lwm2m_uri_t uri_failed_count = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_O_FAILED_OTA_COUNTER};
+                lwm2m_resource_value_changed(data->lwm2mH, &uri_failed_count);
+            }
+            result = COAP_204_CHANGED;
+            break;
+        }
+
         default:
             result = COAP_405_METHOD_NOT_ALLOWED;
         }
@@ -443,6 +483,9 @@ static void ota_task(void *pvParameter)
     
     if (err != ESP_OK) {
         ESP_LOGE(FW_TAG, "OTA begin failed: %s", esp_err_to_name(err));
+        if (data->failed_ota_counter < UINT32_MAX) {
+            data->failed_ota_counter++;
+        }
         if (err == ESP_ERR_NO_MEM) {
             data->result = FW_RESULT_OUT_OF_MEMORY;
         } else if (err == ESP_ERR_INVALID_ARG) {
@@ -513,6 +556,9 @@ static void ota_task(void *pvParameter)
     
     if (err != ESP_OK) {
         ESP_LOGE(FW_TAG, "OTA download failed: %s", esp_err_to_name(err));
+        if (data->failed_ota_counter < UINT32_MAX) {
+            data->failed_ota_counter++;
+        }
         if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
             data->result = FW_RESULT_CRC_FAILED;
         } else if (err == ESP_ERR_NO_MEM || err == ESP_ERR_OTA_SELECT_INFO_INVALID) {
@@ -546,6 +592,7 @@ static void ota_task(void *pvParameter)
     if (err == ESP_OK) {
         ESP_LOGI(FW_TAG, "OTA update successful! Rebooting in 3 seconds...");
         data->result = FW_RESULT_SUCCESS;
+        data->failed_ota_counter = 0;
         data->state = FW_STATE_IDLE;
         
         // Notify success before reboot
@@ -560,6 +607,9 @@ static void ota_task(void *pvParameter)
         esp_restart();
     } else {
         ESP_LOGE(FW_TAG, "OTA finish failed: %s", esp_err_to_name(err));
+        if (data->failed_ota_counter < UINT32_MAX) {
+            data->failed_ota_counter++;
+        }
         data->result = FW_RESULT_UPDATE_FAILED;
         data->state = FW_STATE_IDLE;
     }
@@ -569,8 +619,10 @@ ota_end:
     if (data->lwm2mH) {
         lwm2m_uri_t uri_state = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_M_STATE};
         lwm2m_uri_t uri_result = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_M_UPDATE_RESULT};
+        lwm2m_uri_t uri_failed_count = {.objectId = LWM2M_FIRMWARE_UPDATE_OBJECT_ID, .instanceId = 0, .resourceId = RES_O_FAILED_OTA_COUNTER};
         lwm2m_resource_value_changed(data->lwm2mH, &uri_state);
         lwm2m_resource_value_changed(data->lwm2mH, &uri_result);
+        lwm2m_resource_value_changed(data->lwm2mH, &uri_failed_count);
     }
 
     s_fw_ota_in_progress = false;
@@ -607,6 +659,19 @@ static uint8_t prv_firmware_execute(lwm2m_context_t *contextP,
     case RES_M_UPDATE:
         if (data->state == FW_STATE_IDLE || data->state == FW_STATE_DOWNLOADED)
         {
+            if (data->failed_ota_counter >= FW_OTA_MAX_RETRY_COUNT)
+            {
+#ifdef ESP_PLATFORM
+                ESP_LOGW(FW_TAG,
+                         "Firmware update blocked: failed counter reached limit (%lu >= %u); clear /5/0/%u to retry",
+                         (unsigned long)data->failed_ota_counter,
+                         (unsigned)FW_OTA_MAX_RETRY_COUNT,
+                         (unsigned)RES_O_FAILED_OTA_COUNTER);
+#endif
+                data->result = FW_RESULT_UPDATE_FAILED;
+                return COAP_400_BAD_REQUEST;
+            }
+
             // Check if package URI is set
             if (strlen(data->package_uri) == 0)
             {
@@ -727,6 +792,7 @@ lwm2m_object_t * get_object_firmware(void)
 
            /* Support both push and pull methods */
            data->delivery_method = 2;  // Both push and pull
+              data->failed_ota_counter = 0;
         }
         else
         {
