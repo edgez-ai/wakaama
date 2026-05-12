@@ -11,6 +11,9 @@ idf_component_register(
         "core/"
         "data/"
 
+    EXCLUDE_SRCS
+        "examples/client/object_device.c"
+
     PRIV_INCLUDE_DIRS
         "core"
         "coap/"
