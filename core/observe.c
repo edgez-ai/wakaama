@@ -1077,21 +1077,48 @@ static void prv_obsRequestCallback(lwm2m_context_t * contextP,
 
     if (code != COAP_205_CONTENT) {
         // Some kind of error occurred, call the request callback with an error code
+        LOG_ARG_DBG("Observe callback error code=%u payload_len=%zu", (unsigned)code, (size_t)0);
         observationData->callback(contextP, observationData->client, &observationData->uri,
                                   code, //?
                                   NULL, LWM2M_CONTENT_TEXT, NULL, 0, observationData->userData);
     } else if (IS_OPTION(packet, COAP_OPTION_BLOCK2) && packet->block2_more) {
-        // Call request callback with partial block2 content.
-        observationData->callback(contextP, observationData->client, &observationData->uri,
+        // Pass block metadata with partial block2 content so callers can reassemble payloads.
+        int has_block2 = coap_get_header_block2(packet, &block_num, &block_more, &block_size, NULL);
+        if (has_block2) {
+            block_info.block_num = block_num;
+            block_info.block_size = block_size;
+            block_info.block_more = block_more;
+            LOG_ARG_DBG("Observe callback partial block2 num=%u size=%u more=%u payload_len=%zu",
+                        (unsigned)block_num,
+                        (unsigned)block_size,
+                        (unsigned)block_more,
+                        packet->payload_len);
+        } else {
+            LOG_ARG_DBG("Observe callback partial block2 (header parse failed) payload_len=%zu", packet->payload_len);
+        }
+
+        observationData->callback(contextP,
+                                  observationData->client,
+                                  &observationData->uri,
                                   code, //?
-                                  NULL, utils_convertMediaType(packet->content_type), packet->payload,
-                                  packet->payload_len, observationData->userData);
+                                  has_block2 ? &block_info : NULL,
+                                  utils_convertMediaType(packet->content_type),
+                                  packet->payload,
+                                  packet->payload_len,
+                                  observationData->userData);
     } else {
         int has_block2 = coap_get_header_block2(packet, &block_num, &block_more, &block_size, NULL);
         if (has_block2) {
             block_info.block_num = block_num;
             block_info.block_size = block_size;
             block_info.block_more = block_more;
+            LOG_ARG_DBG("Observe callback final block2 num=%u size=%u more=%u payload_len=%zu",
+                        (unsigned)block_num,
+                        (unsigned)block_size,
+                        (unsigned)block_more,
+                        packet->payload_len);
+        } else {
+            LOG_ARG_DBG("Observe callback non-block payload_len=%zu", packet->payload_len);
         }
 
         if (observationP == NULL) {
