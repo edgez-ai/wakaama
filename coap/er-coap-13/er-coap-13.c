@@ -1603,7 +1603,7 @@ size_t coap_set_payload(void *packet, const void *payload, size_t length)
   coap_packet_t *const coap_pkt = (coap_packet_t *) packet;
 
   coap_pkt->payload = (uint8_t *) payload;
-  coap_pkt->payload_len = length;
+  coap_pkt->payload_len = (uint16_t)(length);
 
   return coap_pkt->payload_len;
 }
