@@ -93,6 +93,10 @@ Contains code snippets which are:
 
 #include <stdio.h>
 
+#ifndef EDGEZ_DEBUG_LOG
+#define EDGEZ_DEBUG_LOG 0
+#endif
+
 #if __STDC_VERSION__ >= 201112L
 #include <assert.h>
 static_assert(LWM2M_COAP_DEFAULT_BLOCK_SIZE == 16 || LWM2M_COAP_DEFAULT_BLOCK_SIZE == 32 ||
@@ -511,7 +515,9 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
     static coap_packet_t response[1];
 
     LOG_DBG("Entering");
-    fprintf(stderr, "[DBG-SRV] lwm2m_handle_packet: received %zu bytes\r\n", length);
+    if (EDGEZ_DEBUG_LOG) {
+        fprintf(stderr, "[DBG-SRV] lwm2m_handle_packet: received %zu bytes\r\n", length);
+    }
     
     /* The buffer length is uint16_t here, as UDP packet length field is 16 bit.
      * This might change in the future e.g. for supporting TCP or other transport.
@@ -519,9 +525,11 @@ void lwm2m_handle_packet(lwm2m_context_t *contextP, uint8_t *buffer, size_t leng
     coap_error_code = coap_parse_message(message, buffer, (uint16_t)length);
     if (coap_error_code == NO_ERROR)
     {
-        fprintf(stderr, "[DBG-SRV] PARSED: type=%u code=%u.%02u mid=%u payload_len=%zu pkt_len=%zu content_type=%d\r\n",
+        if (EDGEZ_DEBUG_LOG) {
+            fprintf(stderr, "[DBG-SRV] PARSED: type=%u code=%u.%02u mid=%u payload_len=%zu pkt_len=%zu content_type=%d\r\n",
                 message->type, message->code >> 5, message->code & 0x1F,
                 message->mid, message->payload_len, length, message->content_type);
+        }
         LOG_ARG_DBG("Parsed: ver %u, type %u, tkl %u, code %u.%.2u, mid %u, Content type: %d", message->version,
                     message->type, message->token_len, message->code >> 5, message->code & 0x1F, message->mid,
                     message->content_type);

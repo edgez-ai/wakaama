@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef EDGEZ_DEBUG_LOG
+#define EDGEZ_DEBUG_LOG 0
+#endif
+
 #define COAP_PORT "5683"
 #define COAPS_PORT "5684"
 #define URI_LENGTH 256
@@ -128,9 +132,11 @@ int send_data(lwm2m_dtls_connection_t *connP, uint8_t *buffer, size_t length) {
         port = saddr->sin6_port;
     }
 
-    fprintf(stderr, "Sending %d bytes to [%s]:%hu\r\n", (int)length, s, ntohs(port));
+    if (EDGEZ_DEBUG_LOG) {
+        fprintf(stderr, "Sending %d bytes to [%s]:%hu\r\n", (int)length, s, ntohs(port));
 
-    output_buffer(stderr, buffer, length, 0);
+        output_buffer(stderr, buffer, length, 0);
+    }
 #endif
 
     offset = 0;
