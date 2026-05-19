@@ -1170,16 +1170,16 @@ int senml_json_serialize(const lwm2m_uri_t * uriP,
     }
     bufferJSON[head++] = JSON_FOOTER;
 
-    //fprintf(stderr, "[DBG] SENML JSON: malloc(%zu) for final buffer\r\n", head);
+    fprintf(stderr, "[DBG] SENML JSON: malloc(%zu) for final buffer\r\n", head);
     *bufferP = (uint8_t *)lwm2m_malloc(head);
     if (*bufferP == NULL) {
-        //fprintf(stderr, "[DBG] SENML JSON: malloc FAILED\r\n");
+        fprintf(stderr, "[DBG] SENML JSON: malloc FAILED\r\n");
         lwm2m_free(bufferJSON);
         return -1;
     }
     memcpy(*bufferP, bufferJSON, head);
     lwm2m_free(bufferJSON);
-    //fprintf(stderr, "[DBG] SENML JSON: success, returning %zu bytes\r\n", head);
+    fprintf(stderr, "[DBG] SENML JSON: success, returning %zu bytes\r\n", head);
 
     return head;
 }
