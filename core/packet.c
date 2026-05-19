@@ -276,7 +276,7 @@ static uint8_t handle_request(lwm2m_context_t * contextP,
         break;
     }
     
-    fprintf(stderr, "[DBG] handle_request result=%d\r\n", result);
+    //fprintf(stderr, "[DBG] handle_request result=%d\r\n", result);
 
     coap_set_status_code(response, result);
 
@@ -984,9 +984,9 @@ uint8_t message_send(lwm2m_context_t * contextP,
     allocLen = coap_serialize_get_size(message);
     LOG_ARG("Size to allocate: %d", allocLen);
     
-    fprintf(stderr, "[DBG] message_send: type=%u code=%u.%02u mid=%u payload_len=%zu alloc_len=%zu\r\n",
-            message->type, message->code >> 5, message->code & 0x1F,
-            message->mid, message->payload_len, allocLen);
+    //fprintf(stderr, "[DBG] message_send: type=%u code=%u.%02u mid=%u payload_len=%zu alloc_len=%zu\r\n",
+    //        message->type, message->code >> 5, message->code & 0x1F,
+    //        message->mid, message->payload_len, allocLen);
     
     if (allocLen == 0) return COAP_500_INTERNAL_SERVER_ERROR;
 
@@ -994,19 +994,19 @@ uint8_t message_send(lwm2m_context_t * contextP,
     if (pktBuffer != NULL)
     {
         pktBufferLen = coap_serialize_message(message, pktBuffer);
-        LOG_ARG("coap_serialize_message() returned %d", pktBufferLen);
-        fprintf(stderr, "[DBG] message_send: serialized to %zu bytes\r\n", pktBufferLen);
+        //LOG_ARG("coap_serialize_message() returned %d", pktBufferLen);
+        //fprintf(stderr, "[DBG] message_send: serialized to %zu bytes\r\n", pktBufferLen);
         
         if (0 != pktBufferLen)
         {
             result = lwm2m_buffer_send(sessionH, pktBuffer, pktBufferLen, contextP->userData);
-            fprintf(stderr, "[DBG] message_send: lwm2m_buffer_send returned %u\r\n", result);
+            //fprintf(stderr, "[DBG] message_send: lwm2m_buffer_send returned %u\r\n", result);
         }
         lwm2m_free(pktBuffer);
     }
     else
     {
-        fprintf(stderr, "[DBG] message_send: malloc FAILED for %zu bytes\r\n", allocLen);
+        //fprintf(stderr, "[DBG] message_send: malloc FAILED for %zu bytes\r\n", allocLen);
     }
 
     return result;
