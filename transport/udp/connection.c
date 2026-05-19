@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef EDGEZ_DEBUG_LOG
+#define EDGEZ_DEBUG_LOG 0
+#endif
+
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -175,9 +179,11 @@ int lwm2m_connection_send(lwm2m_connection_t *connP, uint8_t *buffer, size_t len
         return ret;
     }
 
-    fprintf(stderr, "Sending %zu bytes to [%s]:%hu\r\n", length, s, ntohs(port));
+    if (EDGEZ_DEBUG_LOG) {
+        fprintf(stderr, "Sending %zu bytes to [%s]:%hu\r\n", length, s, ntohs(port));
 
-    output_buffer(stderr, buffer, length, 0);
+        output_buffer(stderr, buffer, length, 0);
+    }
 
     offset = 0;
     while (offset != length) {
