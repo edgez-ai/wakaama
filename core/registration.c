@@ -63,6 +63,7 @@
 #include <limits.h>
 
 #define MAX_LOCATION_LENGTH 10      // strlen("/rd/65534") + 1
+#define LWM2M_SERVER_DEREGISTER_DELAY 5
 
 #ifdef LWM2M_CLIENT_MODE
 
@@ -1946,6 +1947,45 @@ void registration_freeClient(lwm2m_context_t *const context, lwm2m_client_t *cli
     lwm2m_free(clientP);
 }
 
+#ifdef LWM2M_SERVER_MODE
+static void prv_clearClientDeregisterDelay(lwm2m_client_t *clientP)
+{
+    if (clientP == NULL)
+    {
+        return;
+    }
+
+    clientP->deregisterPending = false;
+    clientP->deregisterAfter = 0;
+}
+
+static void prv_scheduleClientDeregister(lwm2m_client_t *clientP, time_t now)
+{
+    if (clientP == NULL)
+    {
+        return;
+    }
+
+    if (!clientP->deregisterPending)
+    {
+        clientP->deregisterPending = true;
+        clientP->deregisterAfter = now + LWM2M_SERVER_DEREGISTER_DELAY;
+    }
+}
+
+static void prv_removeClient(lwm2m_context_t *contextP, lwm2m_client_t *clientP)
+{
+    if (contextP->monitorCallback != NULL)
+    {
+        contextP->monitorCallback(contextP, clientP->internalID, NULL, COAP_202_DELETED, NULL,
+                                  LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
+    }
+
+    contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
+    registration_freeClient(contextP, clientP);
+}
+#endif
+
 static int prv_getLocationString(uint16_t id,
                                  char location[MAX_LOCATION_LENGTH])
 {
@@ -2163,6 +2203,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             clientP->format = format;
             clientP->lifetime = lifetime;
             clientP->endOfLife = tv_sec + lifetime;
+            prv_clearClientDeregisterDelay(clientP);
             clientP->objectList = objects;
             clientP->sessionH = fromSessionH;
 
@@ -2319,6 +2360,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             }
 
             clientP->endOfLife = tv_sec + clientP->lifetime;
+            prv_clearClientDeregisterDelay(clientP);
 
             if (contextP->monitorCallback != NULL)
             {
@@ -2370,12 +2412,7 @@ uint8_t  registration_handleRequest(lwm2m_context_t * contextP,
             return COAP_400_BAD_REQUEST;
         }
 
-        if (contextP->monitorCallback != NULL) {
-            contextP->monitorCallback(contextP, clientP->internalID, NULL, COAP_202_DELETED, NULL, LWM2M_CONTENT_TEXT,
-                                      NULL, 0, contextP->monitorUserData);
-        }
-        contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
-        registration_freeClient(contextP, clientP);
+        prv_scheduleClientDeregister(clientP, tv_sec);
         result = COAP_202_DELETED;
     }
     break;
@@ -2487,17 +2524,37 @@ void registration_step(lwm2m_context_t * contextP,
     while (clientP != NULL)
     {
         lwm2m_client_t * nextP = clientP->next;
+        time_t interval;
 
-        if (clientP->endOfLife <= currentTime) {
-            if (contextP->monitorCallback != NULL) {
-                contextP->monitorCallback(contextP, clientP->internalID, NULL, COAP_202_DELETED, NULL,
-                                          LWM2M_CONTENT_TEXT, NULL, 0, contextP->monitorUserData);
+        if (clientP->deregisterPending)
+        {
+            if (clientP->deregisterAfter <= currentTime)
+            {
+                prv_removeClient(contextP, clientP);
             }
-            contextP->clientList = (lwm2m_client_t *)LWM2M_LIST_RM(contextP->clientList, clientP->internalID, NULL);
-            registration_freeClient(contextP, clientP);
-        } else {
-            time_t interval;
+            else
+            {
+                interval = clientP->deregisterAfter - currentTime;
+                if (*timeoutP > interval)
+                {
+                    *timeoutP = interval;
+                }
+            }
+            clientP = nextP;
+            continue;
+        }
 
+        if (clientP->endOfLife <= currentTime)
+        {
+            prv_scheduleClientDeregister(clientP, currentTime);
+            interval = clientP->deregisterAfter - currentTime;
+            if (*timeoutP > interval)
+            {
+                *timeoutP = interval;
+            }
+        }
+        else
+        {
             interval = clientP->endOfLife - currentTime;
 
             if (*timeoutP > interval)
