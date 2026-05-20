@@ -63,7 +63,7 @@
 #include <limits.h>
 
 #define MAX_LOCATION_LENGTH 10      // strlen("/rd/65534") + 1
-#define LWM2M_SERVER_DEREGISTER_DELAY 5
+#define LWM2M_SERVER_DEREGISTER_DELAY 15
 
 #ifdef LWM2M_CLIENT_MODE
 
