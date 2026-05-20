@@ -1970,6 +1970,11 @@ static void prv_scheduleClientDeregister(lwm2m_client_t *clientP, time_t now)
     {
         clientP->deregisterPending = true;
         clientP->deregisterAfter = now + LWM2M_SERVER_DEREGISTER_DELAY;
+        printf("edgez deregister scheduled: endpoint=%s now=%ld execute_at=%ld delay_s=%d\n",
+               (clientP->name != NULL) ? clientP->name : "",
+               (long)now,
+               (long)clientP->deregisterAfter,
+               LWM2M_SERVER_DEREGISTER_DELAY);
     }
 }
 
@@ -2530,11 +2535,20 @@ void registration_step(lwm2m_context_t * contextP,
         {
             if (clientP->deregisterAfter <= currentTime)
             {
+                printf("edgez deregister executing: endpoint=%s now=%ld execute_at=%ld\n",
+                       (clientP->name != NULL) ? clientP->name : "",
+                       (long)currentTime,
+                       (long)clientP->deregisterAfter);
                 prv_removeClient(contextP, clientP);
             }
             else
             {
                 interval = clientP->deregisterAfter - currentTime;
+                printf("edgez deregister waiting: endpoint=%s now=%ld execute_at=%ld remaining_s=%ld\n",
+                       (clientP->name != NULL) ? clientP->name : "",
+                       (long)currentTime,
+                       (long)clientP->deregisterAfter,
+                       (long)interval);
                 if (*timeoutP > interval)
                 {
                     *timeoutP = interval;
