@@ -511,11 +511,17 @@ static void prv_resultCallback(lwm2m_context_t * contextP,
             block_info.block_num = block_num;
             block_info.block_size = block_size;
             block_info.block_more = block_more;
+            LOG_ARG_DBG("DM callback block2 num=%u size=%u more=%u payload_len=%zu",
+                        (unsigned)block_num,
+                        (unsigned)block_size,
+                        (unsigned)block_more,
+                        packet->payload_len);
             dataP->callback(contextP, dataP->clientID,
                             &dataP->uri, packet->code, &block_info,
                             utils_convertMediaType(packet->content_type), packet->payload, packet->payload_len,
                             dataP->userData);
         } else {
+            LOG_ARG_DBG("DM callback non-block payload_len=%zu", packet->payload_len);
             dataP->callback(contextP, dataP->clientID,
                             &dataP->uri, packet->code, NULL,
                             utils_convertMediaType(packet->content_type), packet->payload, packet->payload_len,
