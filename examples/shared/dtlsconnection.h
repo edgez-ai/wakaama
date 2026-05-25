@@ -60,8 +60,8 @@ extern "C" {
      (*(const uint32_t *)(const void *)(&(a)->s6_addr[8]) == htonl(0x0000ffff)))
 #endif
 
-// after 40sec of inactivity we rehandshake
-#define DTLS_NAT_TIMEOUT 40
+// Disabled: do not force periodic DTLS rehandshake based on idle timeout.
+#define DTLS_NAT_TIMEOUT 0
 
 typedef struct _dtls_connection_t
 {
