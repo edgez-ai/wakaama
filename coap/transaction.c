@@ -381,8 +381,11 @@ bool transaction_handleResponse(lwm2m_context_t * contextP,
                     transacP->retrans_time = tv_sec;
                 }
                 if (message->code == COAP_EMPTY_MESSAGE_CODE) {
-                    // if empty ack received, set timeout for separate response
-                    transacP->retrans_time += COAP_SEPARATE_TIMEOUT;
+                    if (transacP->retrans_deadline > 0) {
+                        transacP->retrans_time = transacP->retrans_deadline;
+                    } else {
+                        transacP->retrans_time += COAP_SEPARATE_TIMEOUT;
+                    }
                 } else {
                     transacP->retrans_time += COAP_RESPONSE_TIMEOUT * transacP->retrans_counter;
                 }
