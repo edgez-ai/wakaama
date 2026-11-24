@@ -207,6 +207,10 @@ void lwm2m_close(lwm2m_context_t * contextP)
 
     LOG_DBG("Entering");
     lwm2m_deregister(contextP);
+    /* Cancellation callbacks retain pointers into the server/Observe lists,
+     * including the deregistration transaction just queued above. Run them
+     * before those lists are destroyed (e.g. reconnect after AP/server loss). */
+    prv_deleteTransactionList(contextP);
     prv_deleteServerList(contextP);
     prv_deleteBootstrapServerList(contextP);
     prv_deleteObservedList(contextP);
